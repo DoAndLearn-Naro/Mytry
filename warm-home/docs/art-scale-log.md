@@ -47,6 +47,14 @@
 1. 改 `DRAW` 裡該件家具 → 2. 跑暫存腳本量新比例 → 3. 按公式改該件 `footprint`。
    `Z_SCALE` 則是全域開關，動它之後 13 件比例都要重測。
 
+## v0.7.1 啟動崩潰（object is not iterable）
+- 現象：push 後開 App 直接「目前無法啟動」。
+- 根因：`cornerPolygons()` 多邊形陣列混入 `{x,y} 物件`（O、TOP），
+  `.map(([x,y]) => …)` 解構物件炸裂。共三處：leftWall、rightWall、floor、trimRight。
+- 修法：統一先轉 `[x, y]` 陣列點。
+- 防再犯：verify 加「房體多邊形 4 點全是數字」＋「VIEW 10:15」兩項，
+  CI 會擋（這次就是 verify 先抓到第二處漏網）。
+
 ## v0.7.0 等級房間＋解鎖（框架版）
 - 格數：Lv1 地板 10×5／牆 5×3＋10×3 → Lv2 14×7／7×4＋14×4 → Lv3 20×10／10×5＋20×5，
   永遠 1:2 等比（`LEVEL_GRIDS`＋`setRoomLevel`，verify 逐級全測）。

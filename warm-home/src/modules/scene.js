@@ -200,23 +200,26 @@ export function cornerDepth(plane, gx, gy, gw = 1, gh = 1) {
 
 /** 角落房多邊形（全部由 CORNER 算出，改 TOP/V 自動跟著變） */
 export function cornerPolygons() {
-  const { O, R, L, V, TOP } = CORNER;
+  const { O, R, L, TOP } = CORNER;
   const P = (x, y) => `${Math.round(x)},${Math.round(y)}`;
-  const leftWall = [O, [O.x + L.x, O.y + L.y], [TOP.x + L.x, TOP.y + L.y], TOP];
-  const rightWall = [O, [O.x + R.x, O.y + R.y], [TOP.x + R.x, TOP.y + R.y], TOP];
-  const leftTop0 = TOP, leftTop1 = [TOP.x + L.x, TOP.y + L.y];
-  const rightTop1 = [TOP.x + R.x, TOP.y + R.y];
+  // 注意：全部用 [x, y] 陣列點（O/TOP 是 {x,y} 物件，不可直接放進陣列解構）
+  const o = [O.x, O.y];
+  const t = [TOP.x, TOP.y];
+  const leftWall = [o, [o[0] + L.x, o[1] + L.y], [t[0] + L.x, t[1] + L.y], t];
+  const rightWall = [o, [o[0] + R.x, o[1] + R.y], [t[0] + R.x, t[1] + R.y], t];
+  const leftTop0 = t, leftTop1 = [t[0] + L.x, t[1] + L.y];
+  const rightTop1 = [t[0] + R.x, t[1] + R.y];
   return {
     leftWall: leftWall.map(([x, y]) => P(x, y)).join(' '),
     rightWall: rightWall.map(([x, y]) => P(x, y)).join(' '),
-    floor: [O, [O.x + R.x, O.y + R.y], [O.x + R.x + L.x, O.y + R.y + L.y], [O.x + L.x, O.y + L.y]].map(([x, y]) => P(x, y)).join(' '),
+    floor: [o, [o[0] + R.x, o[1] + R.y], [o[0] + R.x + L.x, o[1] + R.y + L.y], [o[0] + L.x, o[1] + L.y]].map(([x, y]) => P(x, y)).join(' '),
     baseLeft: '256,292 400,364 400,382 256,310',
     baseRight: '400,364 688,220 688,238 400,382',
     baseFront: '256,292 400,364 544,292 544,310 400,382 256,310',
     skirtLeft: '400,220 256,292 256,284 400,212',
     skirtRight: '400,220 688,364 688,356 400,212',
     trimLeft: [leftTop0, leftTop1, [leftTop1[0], leftTop1[1] + 5], [leftTop0[0], leftTop0[1] + 5]].map(([x, y]) => P(x, y)).join(' '),
-    trimRight: [TOP, rightTop1, [rightTop1[0], rightTop1[1] + 5], [TOP[0], TOP[1] + 5]].map(([x, y]) => P(x, y)).join(' '),
+    trimRight: [t, rightTop1, [rightTop1[0], rightTop1[1] + 5], [t[0], t[1] + 5]].map(([x, y]) => P(x, y)).join(' '),
     cornerLine: { x1: TOP.x, y1: TOP.y, x2: O.x, y2: O.y },
   };
 }

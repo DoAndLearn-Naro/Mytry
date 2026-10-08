@@ -13,6 +13,7 @@ import {
   resolvePlane, getGridShape, rotatedGridSize,
   cornerCellToXY, cornerCellFromXY, isAreaFree,
   findFreeCellAuto, findFreeCell, migratePlacementsToGrids,
+  cornerPolygons, VIEW,
 } from '../src/modules/scene.js';
 import { DEFAULT_FURNITURE } from '../src/modules/furniture.js';
 import { levelForXp, isUnlocked, LEVELS } from '../src/modules/levels.js';
@@ -145,6 +146,23 @@ check('250XP 升 Lv3', levelForXp(250).level === 3);
 check('茶几 Lv1 上鎖、Lv2 解鎖', !isUnlocked(map['tea-table'], 1) && isUnlocked(map['tea-table'], 2));
 check('床永遠解鎖', isUnlocked(map.bed, 1));
 check('等級表三級', LEVELS.length === 3);
+
+// 5) 房體多邊形（啟動渲染會第一個呼叫，曾因混入 {x,y} 物件炸掉啟動）
+console.log('—— 房體多邊形');
+let polyBad = null;
+try {
+  const pg = cornerPolygons();
+  for (const k of ['leftWall', 'rightWall', 'floor', 'trimLeft', 'trimRight']) {
+    const pts = pg[k].split(' ');
+    if (pts.length !== 4 || pts.some((s) => !/^-?\d+,-?\d+$/.test(s))) polyBad = `${k}=${pg[k]}`;
+  }
+  const cl = pg.cornerLine;
+  if (![cl.x1, cl.y1, cl.x2, cl.y2].every(Number.isFinite)) polyBad = 'cornerLine';
+} catch (e) {
+  polyBad = String(e && e.message || e);
+}
+check('多邊形 4 點全是數字', polyBad === null, polyBad || '');
+check('VIEW 10:15', Math.abs(VIEW.w / VIEW.h - 10 / 15) < 1e-9);
 
 console.log(failures ? `\n❌ ${failures} 項未過` : '\n✅ 全部通過');
 process.exit(failures ? 1 : 0);
