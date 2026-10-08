@@ -1,14 +1,14 @@
 import {
   SCENE, GRID, CORNER, rotatedGridSize, cornerCellToXY,
-  cornerDepth, cornerPolygons,
+  cornerDepth, cornerPolygons, resolvePlane,
 } from '../modules/scene.js';
 import { FurnitureItem } from './FurnitureItem.js';
 
 /**
- * 角落式 2.5D 房間 — Warm Home v0.3（try.html 視角）
- * ─────────────────────────────────────────────
- * 左牆 + 右牆 + 菱形地板，視角固定不旋轉。
- * 地板 8×4 格、牆面 8×2 格（0-3 左牆、4-7 右牆），一格一格框住、可拖移吸附。
+ * 角落式 2.5D 房間 — Warm Home v0.6（等比格線）
+ * ─────────────────────────────────────────
+ * 左牆 5×2＋右牆 10×2＋地板 10×5，每格等大、共用邊對齊。
+ * 一格一格框住、可拖移吸附。
  */
 
 export function RoomScene({
@@ -77,9 +77,11 @@ export function RoomScene({
   const sorted = [...placements].sort((a, b) => {
     const fa = map[a.furnitureId];
     const fb = map[b.furnitureId];
-    const pa = fa ? fa.placement : 'floor';
-    const pb = fb ? fb.placement : 'floor';
-    if (pa !== pb) return pa === 'wall' ? -1 : 1;
+    const pa = resolvePlane(a, fa);
+    const pb = resolvePlane(b, fb);
+    const wallA = pa !== 'floor';
+    const wallB = pb !== 'floor';
+    if (wallA !== wallB) return wallA ? -1 : 1;
     const sa = fa ? rotatedGridSize(fa, a.rotation || 0) : { w: 1, h: 1 };
     const sb = fb ? rotatedGridSize(fb, b.rotation || 0) : { w: 1, h: 1 };
     return cornerDepth(pa, a.gx ?? 0, a.gy ?? 0, sa.w, sa.h)
@@ -89,10 +91,11 @@ export function RoomScene({
   sorted.forEach((p) => {
     const furniture = map[p.furnitureId];
     if (!furniture) return;
+    const plane = resolvePlane(p, furniture);
     const size = rotatedGridSize(furniture, p.rotation || 0);
-    const depth = furniture.placement === 'wall'
-      ? 5
-      : 20 + Math.round(cornerDepth('floor', p.gx ?? 0, p.gy ?? 0, size.w, size.h) * 10);
+    const depth = plane === 'floor'
+      ? 20 + Math.round(cornerDepth('floor', p.gx ?? 0, p.gy ?? 0, size.w, size.h) * 10)
+      : 5;
     const el = FurnitureItem({
       placement: p,
       furniture,
@@ -120,59 +123,60 @@ export function RoomScene({
   return root;
 }
 
-/** 一格一格的框：地板 32 格 + 牆面 16 格 */
+/** 一格一格的框：地板 10×5＋左牆 5×2＋右牆 10×2 */
 function cellsSVG() {
   const { O, R, L, TOP, V } = CORNER;
   const P = (x, y) => `${Math.round(x)},${Math.round(y)}`;
   let s = '';
-  // 地板格
-  for (let gy = 0; gy < GRID.floor.rows; gy++) {
-    for (let gx = 0; gx < GRID.floor.cols; gx++) {
-      const ax = O.x + (gx / 8) * R.x + (gy / 4) * L.x;
-      const ay = O.y + (gx / 8) * R.y + (gy / 4) * L.y;
-      const bx = O.x + ((gx + 1) / 8) * R.x + (gy / 4) * L.x;
-      const by = O.y + ((gx + 1) / 8) * R.y + (gy / 4) * L.y;
-      const cx = O.x + ((gx + 1) / 8) * R.x + ((gy + 1) / 4) * L.x;
-      const cy = O.y + ((gx + 1) / 8) * R.y + ((gy + 1) / 4) * L.y;
-      const dx = O.x + (gx / 8) * R.x + ((gy + 1) / 4) * L.x;
-      const dy = O.y + (gx / 8) * R.y + ((gy + 1) / 4) * L.y;
+  const fg = GRID.floor;
+  for (let gy = 0; gy < fg.rows; gy++) {
+    for (let gx = 0; gx < fg.cols; gx++) {
+      const ax = O.x + (gx / fg.cols) * R.x + (gy / fg.rows) * L.x;
+      const ay = O.y + (gx / fg.cols) * R.y + (gy / fg.rows) * L.y;
+      const bx = O.x + ((gx + 1) / fg.cols) * R.x + (gy / fg.rows) * L.x;
+      const by = O.y + ((gx + 1) / fg.cols) * R.y + (gy / fg.rows) * L.y;
+      const cx = O.x + ((gx + 1) / fg.cols) * R.x + ((gy + 1) / fg.rows) * L.x;
+      const cy = O.y + ((gx + 1) / fg.cols) * R.y + ((gy + 1) / fg.rows) * L.y;
+      const dx = O.x + (gx / fg.cols) * R.x + ((gy + 1) / fg.rows) * L.x;
+      const dy = O.y + (gx / fg.cols) * R.y + ((gy + 1) / fg.rows) * L.y;
       s += `<polygon points="${P(ax, ay)} ${P(bx, by)} ${P(cx, cy)} ${P(dx, dy)}" class="cell cell--floor" data-cell="floor:${gx},${gy}"/>`;
     }
   }
-  // 牆格（左 4×2 + 右 4×2）
-  for (let gy = 0; gy < GRID.wall.rows; gy++) {
-    for (let gx = 0; gx < GRID.wall.cols; gx++) {
-      const quad = wallQuad(gx, gy, TOP, R, L, V);
-      s += `<polygon points="${quad}" class="cell ${gx < 4 ? 'cell--left' : 'cell--right'}" data-cell="wall:${gx},${gy}"/>`;
+  for (const plane of ['leftWall', 'rightWall']) {
+    const g = GRID[plane];
+    for (let gy = 0; gy < g.rows; gy++) {
+      for (let gx = 0; gx < g.cols; gx++) {
+        s += `<polygon points="${wallQuad(plane, gx, gy)}" class="cell ${plane === 'leftWall' ? 'cell--left' : 'cell--right'}" data-cell="${plane}:${gx},${gy}"/>`;
+      }
     }
   }
   return s;
 }
 
-function wallQuad(gx, gy, TOP, R, L, V) {
-  const E = gx < 4 ? L : R;
-  const col = gx < 4 ? gx : gx - 4;
+function wallQuad(plane, gx, gy) {
+  const { TOP, R, L, V } = CORNER;
+  const g = GRID[plane];
+  const E = plane === 'leftWall' ? L : R;
   const P = (x, y) => `${Math.round(x)},${Math.round(y)}`;
-  const ax = TOP.x + (col / 4) * E.x + (gy / 2) * V.x;
-  const ay = TOP.y + (col / 4) * E.y + (gy / 2) * V.y;
-  const bx = TOP.x + ((col + 1) / 4) * E.x + (gy / 2) * V.x;
-  const by = TOP.y + ((col + 1) / 4) * E.y + (gy / 2) * V.y;
-  const cx = TOP.x + ((col + 1) / 4) * E.x + ((gy + 1) / 2) * V.x;
-  const cy = TOP.y + ((col + 1) / 4) * E.y + ((gy + 1) / 2) * V.y;
-  const dx = TOP.x + (col / 4) * E.x + ((gy + 1) / 2) * V.x;
-  const dy = TOP.y + (col / 4) * E.y + ((gy + 1) / 2) * V.y;
+  const ax = TOP.x + (gx / g.cols) * E.x + (gy / g.rows) * V.x;
+  const ay = TOP.y + (gx / g.cols) * E.y + (gy / g.rows) * V.y;
+  const bx = TOP.x + ((gx + 1) / g.cols) * E.x + (gy / g.rows) * V.x;
+  const by = TOP.y + ((gx + 1) / g.cols) * E.y + (gy / g.rows) * V.y;
+  const cx = TOP.x + ((gx + 1) / g.cols) * E.x + ((gy + 1) / g.rows) * V.x;
+  const cy = TOP.y + ((gx + 1) / g.cols) * E.y + ((gy + 1) / g.rows) * V.y;
+  const dx = TOP.x + (gx / g.cols) * E.x + ((gy + 1) / g.rows) * V.x;
+  const dy = TOP.y + (gx / g.cols) * E.y + ((gy + 1) / g.rows) * V.y;
   return `${P(ax, ay)} ${P(bx, by)} ${P(cx, cy)} ${P(dx, dy)}`;
 }
 
 /** 拖移中的目標格高亮（綠=可放、紅=被佔） */
 function dropSVG(dropHint) {
   if (!dropHint) return '';
-  const { placement, gx, gy, gw = 1, gh = 1, ok } = dropHint;
+  const { plane, gx, gy, gw = 1, gh = 1, ok } = dropHint;
   const pts = [];
   for (let dx = 0; dx < gw; dx++) {
     for (let dy = 0; dy < gh; dy++) {
-      const pt = cornerCellToXY(placement, gx + dx, gy + dy, 1, 1);
-      pts.push(pt);
+      pts.push(cornerCellToXY(plane, gx + dx, gy + dy, 1, 1));
     }
   }
   if (!pts.length) return '';

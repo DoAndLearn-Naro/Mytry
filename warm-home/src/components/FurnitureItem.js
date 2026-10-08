@@ -1,4 +1,4 @@
-import { SCENE, rotatedGridSize, cornerCellToXY, cornerCellFromXY } from '../modules/scene.js';
+import { SCENE, rotatedGridSize, cornerCellToXY, cornerCellFromXY, resolvePlane } from '../modules/scene.js';
 import { furnitureArt } from '../modules/furnitureArt.js';
 
 /**
@@ -17,9 +17,10 @@ export function FurnitureItem({
   const waterLevel = Math.min(1, (placement.water || 0) / 6);
   const rot = placement.rotation || 0;
   const size = rotatedGridSize(furniture, rot);
-  const pt = cornerCellToXY(furniture.placement, placement.gx ?? 0, placement.gy ?? 0, size.w, size.h);
+  const plane = resolvePlane(placement, furniture);
+  const pt = cornerCellToXY(plane, placement.gx ?? 0, placement.gy ?? 0, size.w, size.h);
   const isWall = furniture.placement === 'wall';
-  const wallSide = (placement.gx ?? 0) < 4 ? 'left' : 'right';
+  const wallSide = plane === 'leftWall' ? 'left' : 'right';
 
   el.className = `furniture furniture--${furniture.placement}`
     + (isWall ? ` wall-item-${wallSide}` : '')
@@ -95,7 +96,7 @@ export function FurnitureItem({
     onDelete && onDelete(placement.id);
   });
 
-  attachCornerDrag(el, furniture, size, placement, { onMove, onDragHint });
+  attachCornerDrag(el, furniture, size, placement, plane, { onMove, onDragHint });
   return el;
 }
 
@@ -115,7 +116,7 @@ function toSceneXY(el, clientX, clientY, offsetX, offsetY) {
   };
 }
 
-function attachCornerDrag(el, furniture, size, placement, { onMove, onDragHint }) {
+function attachCornerDrag(el, furniture, size, placement, plane, { onMove, onDragHint }) {
   let dragState = null;
 
   const start = (clientX, clientY) => {
@@ -138,10 +139,10 @@ function attachCornerDrag(el, furniture, size, placement, { onMove, onDragHint }
     el.style.left = `${(pt.x / SCENE.width) * 100}%`;
     el.style.top = `${(pt.y / SCENE.height) * 100}%`;
     el.classList.add('is-dragging');
-    const cell = cornerCellFromXY(furniture.placement, pt.x, pt.y, size.w, size.h);
-    const center = cornerCellToXY(furniture.placement, cell.gx, cell.gy, size.w, size.h);
+    const cell = cornerCellFromXY(plane, pt.x, pt.y, size.w, size.h);
+    const center = cornerCellToXY(plane, cell.gx, cell.gy, size.w, size.h);
     dragState.last = { ...cell, x: center.x, y: center.y };
-    if (onDragHint) onDragHint({ placement: furniture.placement, gx: cell.gx, gy: cell.gy, gw: size.w, gh: size.h });
+    if (onDragHint) onDragHint({ plane, gx: cell.gx, gy: cell.gy, gw: size.w, gh: size.h });
   };
 
   const end = () => {

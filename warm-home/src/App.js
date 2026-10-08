@@ -38,9 +38,10 @@ import {
   rotatedGridSize,
   isAreaFree,
   migrateToGrid,
-  randomGridPosition,
-  findFreeCell,
+  randomGridPositionAuto,
+  findFreeCellAuto,
   cornerCellToXY,
+  resolvePlane,
 } from './modules/scene.js';
 import { rollClickInteraction, rollIdleEvent, isCoolingDown } from './modules/interactions.js';
 
@@ -135,22 +136,26 @@ async function reloadAll(ctx) {
   ctx.completedTemplateIds = new Set(todayDone.filter((t) => t.completed).map((t) => t.templateId));
 }
 
-/** 舊 x/y 遷移到格子（只做一次） */
+/** 舊 x/y 遷移到格子（只做一次；v4 之後主要由 migrations 處理） */
 async function migrateLegacyPlacements(ctx) {
   let changed = false;
   for (const p of ctx.placements) {
-    if (p.gx == null || p.gy == null) {
+    if (p.gx == null || p.gy == null || p.plane == null) {
       const next = migrateToGrid(p, ctx.furnitureMap);
       const f = ctx.furnitureMap[p.furnitureId];
       if (f) {
+        const plane = resolvePlane(next, f);
         const size = rotatedGridSize(f, next.rotation || 0);
-        if (!isAreaFree(ctx.placements, ctx.furnitureMap, p.id, f.placement, next.gx, next.gy, size.w, size.h)) {
-          const free = randomGridPosition(ctx.placements, ctx.furnitureMap, f);
-          next.gx = free.gx;
-          next.gy = free.gy;
+        if (!isAreaFree(ctx.placements, ctx.furnitureMap, p.id, plane, next.gx, next.gy, size.w, size.h)) {
+          const free = randomGridPositionAuto(ctx.placements, ctx.furnitureMap, f);
+          if (free) {
+            next.plane = free.plane;
+            next.gx = free.gx;
+            next.gy = free.gy;
+          }
         }
-        const pt = cornerCellToXY(f.placement, next.gx, next.gy, size.w, size.h);
-        await updatePlacement(p.id, { gx: next.gx, gy: next.gy, x: pt.x, y: pt.y, rotation: next.rotation || 0 });
+        const pt = cornerCellToXY(next.plane || plane, next.gx, next.gy, size.w, size.h);
+        await updatePlacement(p.id, { plane: next.plane || plane, gx: next.gx, gy: next.gy, x: pt.x, y: pt.y, rotation: next.rotation || 0 });
         changed = true;
       }
     }
@@ -286,17 +291,18 @@ async function handleMove(ctx, id, patch) {
   const p = ctx.placements.find((x) => x.id === id);
   const f = p ? ctx.furnitureMap[p.furnitureId] : null;
   if (!p || !f) return;
+  const plane = resolvePlane(p, f);
   const size = rotatedGridSize(f, p.rotation || 0);
   // 以角落座標重算中心，避免舊像素殘留
-  const center = cornerCellToXY(f.placement, patch.gx, patch.gy, size.w, size.h);
-  if (!isAreaFree(ctx.placements, ctx.furnitureMap, id, f.placement, center.gx, center.gy, size.w, size.h)) {
+  const center = cornerCellToXY(plane, patch.gx, patch.gy, size.w, size.h);
+  if (!isAreaFree(ctx.placements, ctx.furnitureMap, id, plane, center.gx, center.gy, size.w, size.h)) {
     flashHint('這格被佔走了，換個位置試試');
     ctx.dropHint = null;
     renderScene(ctx);
     return;
   }
   ctx.draggingPlacementId = id;
-  await updatePlacement(id, { gx: center.gx, gy: center.gy, x: center.x, y: center.y });
+  await updatePlacement(id, { plane, gx: center.gx, gy: center.gy, x: center.x, y: center.y });
   ctx.placements = await getAllPlacements();
   ctx.draggingPlacementId = null;
   ctx.dropHint = null;
@@ -315,16 +321,15 @@ function handleDragHint(ctx, hint) {
     clearCellHot();
     return;
   }
-  const dragging = ctx.placements.find((p) => p.id === ctx.selectedPlacementId)
-    || ctx.placements.find((p) => ctx.furnitureMap[p.furnitureId]?.placement === hint.placement);
+  const sel = ctx.placements.find((p) => p.id === ctx.selectedPlacementId);
   // 用被拖家具的實際佔位檢查（優先用選取中的那件）
   let ok = true;
-  const sel = ctx.placements.find((p) => p.id === ctx.selectedPlacementId);
   if (sel) {
     const f = ctx.furnitureMap[sel.furnitureId];
     const size = rotatedGridSize(f, sel.rotation || 0);
-    ok = isAreaFree(ctx.placements, ctx.furnitureMap, sel.id, hint.placement, hint.gx, hint.gy, size.w, size.h);
-    ctx.dropHint = { ...hint, gw: size.w, gh: size.h, ok };
+    const plane = resolvePlane(sel, f);
+    ok = isAreaFree(ctx.placements, ctx.furnitureMap, sel.id, plane, hint.gx, hint.gy, size.w, size.h);
+    ctx.dropHint = { plane, gx: hint.gx, gy: hint.gy, gw: size.w, gh: size.h, ok };
   } else {
     ctx.dropHint = { ...hint, ok: true };
   }
@@ -348,7 +353,7 @@ function paintDropHint(ctx) {
   const pts = [];
   for (let dx = 0; dx < (h.gw || 1); dx++) {
     for (let dy = 0; dy < (h.gh || 1); dy++) {
-      pts.push(cornerCellToXY(h.placement, h.gx + dx, h.gy + dy, 1, 1));
+      pts.push(cornerCellToXY(h.plane, h.gx + dx, h.gy + dy, 1, 1));
     }
   }
   const cx = Math.round(pts.reduce((s, p) => s + p.x, 0) / pts.length);
@@ -358,7 +363,7 @@ function paintDropHint(ctx) {
   clearCellHot();
   for (let dx = 0; dx < (h.gw || 1); dx++) {
     for (let dy = 0; dy < (h.gh || 1); dy++) {
-      const cell = ctx.layers.sceneHost.querySelector(`[data-cell="${h.placement}:${h.gx + dx},${h.gy + dy}"]`);
+      const cell = ctx.layers.sceneHost.querySelector(`[data-cell="${h.plane}:${h.gx + dx},${h.gy + dy}"]`);
       if (cell) cell.classList.add(h.ok ? 'is-hot-ok' : 'is-hot-bad');
     }
   }
@@ -374,13 +379,14 @@ async function handleRotate(ctx, id) {
   if (!p || !f) return;
   const nextRot = ((p.rotation || 0) + 90) % 360;
   const size = rotatedGridSize(f, nextRot);
+  const plane = resolvePlane(p, f);
   const gx = p.gx ?? 0;
   const gy = p.gy ?? 0;
-  if (!isAreaFree(ctx.placements, ctx.furnitureMap, id, f.placement, gx, gy, size.w, size.h)) {
+  if (!isAreaFree(ctx.placements, ctx.furnitureMap, id, plane, gx, gy, size.w, size.h)) {
     flashHint('轉不過去，旁邊太擠了');
     return;
   }
-  const pt = cornerCellToXY(f.placement, gx, gy, size.w, size.h);
+  const pt = cornerCellToXY(plane, gx, gy, size.w, size.h);
   await updatePlacement(id, { rotation: nextRot, x: pt.x, y: pt.y });
   ctx.placements = await getAllPlacements();
   ctx.lastIdleAt = Date.now();
@@ -589,23 +595,21 @@ function openCatalog(ctx) {
       onPick: async (furnitureId) => {
         const f = ctx.furnitureMap[furnitureId];
         if (!f) return;
-        const size = rotatedGridSize(f, 0);
-        // 檢查還有沒有空格
-        const spot = randomGridPosition(ctx.placements, ctx.furnitureMap, f);
-        const free = isAreaFree(ctx.placements, ctx.furnitureMap, null, f.placement, spot.gx, spot.gy, size.w, size.h);
-        if (!free) {
-          // 房間滿了（randomGridPosition 回傳重疊位）
-          if (!findFreeCell(ctx.placements, ctx.furnitureMap, f)) {
-            flashHint(f.placement === 'wall' ? '牆面滿了，先收回一件到倉庫吧' : '地板滿了，先收回一件到倉庫吧');
-            return;
-          }
+        // 自動找空格（牆飾自動挑比較空的那面牆）
+        const spot = findFreeCellAuto(ctx.placements, ctx.furnitureMap, f);
+        if (!spot) {
+          flashHint(f.placement === 'wall' ? '牆面滿了，先收回一件到倉庫吧' : '地板滿了，先收回一件到倉庫吧');
+          return;
         }
+        const size = rotatedGridSize(f, 0);
+        const pt = cornerCellToXY(spot.plane, spot.gx, spot.gy, size.w, size.h);
         await addPlacement({
           furnitureId,
-          gx: spot.gx,
-          gy: spot.gy,
-          x: spot.x,
-          y: spot.y,
+          plane: spot.plane,
+          gx: pt.gx,
+          gy: pt.gy,
+          x: pt.x,
+          y: pt.y,
           rotation: 0,
           water: 0,
           createdAt: Date.now(),
@@ -637,21 +641,22 @@ async function placeFromWarehouse(ctx, warehouseId) {
     return;
   }
   const size = rotatedGridSize(f, rec.rotation || 0);
-  const spot = randomGridPosition(ctx.placements, ctx.furnitureMap, { ...f, gridSize: size });
-  if (!isAreaFree(ctx.placements, ctx.furnitureMap, null, f.placement, spot.gx, spot.gy, size.w, size.h)
-    && !findFreeCell(ctx.placements, ctx.furnitureMap, f)) {
+  const spot = findFreeCellAuto(ctx.placements, ctx.furnitureMap, { ...f, gridSize: size });
+  if (!spot) {
     // 放不回去：退回倉庫
     await stashToWarehouse({ furnitureId: rec.furnitureId, rotation: rec.rotation, water: rec.water });
     flashHint(f.placement === 'wall' ? '牆面滿了，先收回一件吧' : '地板滿了，先收回一件吧');
     await reloadAll(ctx);
     return;
   }
+  const pt = cornerCellToXY(spot.plane, spot.gx, spot.gy, size.w, size.h);
   await addPlacement({
     furnitureId: rec.furnitureId,
-    gx: spot.gx,
-    gy: spot.gy,
-    x: spot.x,
-    y: spot.y,
+    plane: spot.plane,
+    gx: pt.gx,
+    gy: pt.gy,
+    x: pt.x,
+    y: pt.y,
     rotation: rec.rotation || 0,
     water: rec.water || 0,
     createdAt: Date.now(),
@@ -846,6 +851,6 @@ async function ensureInstallDate() {
   const exists = await getMeta('installDate');
   if (!exists) {
     await setMeta('installDate', new Date().toISOString());
-    await setMeta('phase', '0.4.0');
+    await setMeta('phase', '0.5.0');
   }
 }

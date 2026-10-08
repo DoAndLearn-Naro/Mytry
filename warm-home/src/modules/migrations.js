@@ -10,14 +10,17 @@
  *   v1: 初版（furniture/placements/tasks/photos/polaroids）
  *   v2: + interactions/moods，家具回填 gridSize/chatter
  *   v3: + warehouse，角落座標 O.y 200→220 / V 104→120，重算 x/y
- *   v4: （未來範例）+ rooms 多房間：見 migrateV4 註解
+ *   v4: 等比格線（地板 8×4→10×5、統一牆 8×2→左 5×2＋右 10×2），
+ *       placements 加 plane，舊座標等比映射＋碰撞排解
+ *   v5: （未來範例）+ rooms 多房間：見 migrateV5 註解
  */
 
-export const APP_VERSION = '0.4.0';
-export const SCHEMA_VERSION = 3;
+export const APP_VERSION = '0.5.0';
+export const SCHEMA_VERSION = 4;
 
-import { getMeta, setMeta, getAllPlacements, updatePlacement } from './db.js';
-import { rotatedGridSize, cornerCellToXY } from './scene.js';
+import { getMeta, setMeta, getAllPlacements, updatePlacement, getAllFurniture, putFurniture } from './db.js';
+import { DEFAULT_FURNITURE } from './furniture.js';
+import { rotatedGridSize, cornerCellToXY, isAreaFree, findFreeCell, getGridShape } from './scene.js';
 
 const MIGRATIONS = [
   {
@@ -42,10 +45,64 @@ const MIGRATIONS = [
       }
     },
   },
-  // 未來 v4 範例（多房間）：
+  {
+    version: 4,
+    note: 'v4：等比格線遷移。地板 gx×10/8、gy×5/4；舊統一牆格 0-3→左牆（gx×5/4）、4-7→右牆（gx×10/4），gy 不變；碰撞就近找空格',
+    migrate: async (ctx) => {
+      // 先刷新內建型錄的格尺寸/顯示尺寸（舊機 DB 還留著 v0.5 的舊值）
+      for (const f of DEFAULT_FURNITURE) {
+        await putFurniture({ ...f, builtin: true });
+      }
+      const catalog = await getAllFurniture();
+      const map = {};
+      for (const f of catalog) map[f.id] = f;
+      if (ctx) ctx.furnitureMap = map;
+      let placements = await getAllPlacements();
+      for (const p of placements) {
+        const f = map[p.furnitureId];
+        if (!f) continue;
+        const size = rotatedGridSize(f, p.rotation || 0);
+        let plane, gx, gy;
+        if (f.placement === 'floor' && !p.plane) {
+          plane = 'floor';
+          gx = Math.round((p.gx ?? 0) * 1.25);
+          gy = Math.round((p.gy ?? 0) * 1.25);
+        } else if (!p.plane) {
+          // v0.5 統一牆格 → 分牆
+          if ((p.gx ?? 0) < 4) {
+            plane = 'leftWall';
+            gx = Math.round((p.gx ?? 0) * 1.25);
+          } else {
+            plane = 'rightWall';
+            gx = Math.round(((p.gx ?? 0) - 4) * 2.5);
+          }
+          gy = p.gy ?? 0;
+        } else {
+          plane = p.plane;
+          gx = p.gx ?? 0;
+          gy = p.gy ?? 0;
+        }
+        const g = getGridShape(plane);
+        gx = Math.max(0, Math.min(g.cols - size.w, gx));
+        gy = Math.max(0, Math.min(g.rows - size.h, gy));
+        placements = await getAllPlacements();
+        if (!isAreaFree(placements, map, p.id, plane, gx, gy, size.w, size.h)) {
+          const free = findFreeCell(placements, map, f, plane)
+            || (plane !== 'floor' ? findFreeCell(placements, map, f, plane === 'leftWall' ? 'rightWall' : 'leftWall') : null);
+          if (free) {
+            plane = free.plane;
+            gx = free.gx;
+            gy = free.gy;
+          }
+        }
+        const pt = cornerCellToXY(plane, gx, gy, size.w, size.h);
+        await updatePlacement(p.id, { plane, gx: pt.gx, gy: pt.gy, x: pt.x, y: pt.y });
+      }
+    },
+  },
   // {
-  //   version: 4,
-  //   note: 'v4：placements 加 roomId，預設 room-1；warehouse 同步加 roomId',
+  //   version: 5,
+  //   note: 'v5：placements 加 roomId，預設 room-1；warehouse 同步加 roomId',
   //   migrate: async () => {
   //     const placements = await getAllPlacements();
   //     for (const p of placements) {

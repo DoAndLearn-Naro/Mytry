@@ -38,6 +38,9 @@ jobs:
       - name: Install warm-home dependencies
         run: cd warm-home && npm ci
 
+      - name: Verify warm-home grids (no browser needed)
+        run: cd warm-home && npm run verify
+
       - name: Build warm-home
         run: cd warm-home && npm run build
 
