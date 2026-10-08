@@ -18,10 +18,14 @@ import { DEFAULT_FURNITURE, normalizeFurniture } from './furniture.js';
 export async function ensureDefaultFurniture() {
   const all = await getAllFurniture();
   const byId = new Map(all.map((f) => [f.id, f]));
-  // 已有資料也要補上新版內建款 + 回填 gridSize/chatter（舊 DB 遷移）
   for (const f of DEFAULT_FURNITURE) {
     const cur = byId.get(f.id);
     if (!cur) {
+      await putFurniture({ ...f, builtin: true });
+    } else if (cur.builtin !== false) {
+      // 內建款以程式碼為準：footprint/gridSize/tasks/chatter 跟著版本走，
+      // 否則舊機的框永遠是舊尺寸（v0.6.1 高度卡住事件）。
+      // 自訂款（builtin:false，管理員 JSON 上傳的）絕對不覆蓋。
       await putFurniture({ ...f, builtin: true });
     } else if (!cur.gridSize || !cur.chatter) {
       await putFurniture({ ...cur, gridSize: cur.gridSize || f.gridSize, chatter: cur.chatter || f.chatter, footprint: cur.footprint || f.footprint });
