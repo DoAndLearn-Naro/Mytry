@@ -38,10 +38,10 @@ button { font-family: inherit; }
   background: linear-gradient(180deg, #F7EFE0 0%, #EADDC4 100%);
 }
 
-/* ===== Header ===== */
-.app-header { padding: 14px 18px 6px; text-align: center; }
+/* ===== Header（緊湊，房間滿版） ===== */
+.app-header { padding: 8px 14px 4px; text-align: center; }
 .app-header__title {
-  margin: 0; font-size: 30px; color: var(--color-primary-d);
+  margin: 0; font-size: 26px; color: var(--color-primary-d);
   cursor: pointer; transition: transform 0.15s ease;
 }
 .app-header__title.is-secret-hint { transform: scale(0.97); }
@@ -51,12 +51,12 @@ button { font-family: inherit; }
 .scene-host {
   position: relative;
   flex: 1;
-  padding: 14px;
+  padding: 8px 8px 96px;
 }
 .room-scene {
   position: relative;
-  width: 100%; max-width: 720px;
-  aspect-ratio: 3 / 4;
+  width: 100%; max-width: 520px;
+  aspect-ratio: 10 / 15;
   margin: 0 auto;
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -457,7 +457,7 @@ button { font-family: inherit; }
 @media (min-width: 720px) {
   body { font-size: 22px; }
   .app-header__title { font-size: 36px; }
-  .room-scene { max-width: 780px; }
+  .room-scene { max-width: 560px; }
 }
 
 /* ============================================================

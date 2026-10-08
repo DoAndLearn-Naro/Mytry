@@ -15,6 +15,31 @@
 
 export const SCENE = { width: 800, height: 600 };
 
+/**
+ * 顯示裁切 VIEW（10:15 直式滿版）
+ * ─────────────────────────────
+ * 容器 aspect 10/15，SVG viewBox 與 HTML 百分比定位共用同一套裁切座標，
+ * 避免 letterbox 錯位（v0.6.5 之前容器 3:4、畫布 800×600，家具全飄移）。
+ * 範圍含高家具頂部空間（後排床頂約 y=-110）。
+ */
+export const VIEW = { x: 246, y: -150, w: 460, h: 690 };
+
+/** 畫布座標 → 容器百分比（FurnitureItem 定位用） */
+export function viewPct(x, y) {
+  return {
+    left: ((x - VIEW.x) / VIEW.w) * 100,
+    top: ((y - VIEW.y) / VIEW.h) * 100,
+  };
+}
+
+/** 容器像素 → 畫布座標（拖移換算用） */
+export function viewXY(rect, clientX, clientY, offsetX = 0, offsetY = 0) {
+  return {
+    x: ((clientX - offsetX - rect.left) / rect.width) * VIEW.w + VIEW.x,
+    y: ((clientY - offsetY - rect.top) / rect.height) * VIEW.h + VIEW.y,
+  };
+}
+
 export const GRID = {
   floor: { cols: 10, rows: 5 },
   leftWall: { cols: 5, rows: 2 },

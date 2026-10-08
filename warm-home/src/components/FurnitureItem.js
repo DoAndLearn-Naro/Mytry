@@ -1,4 +1,4 @@
-import { SCENE, rotatedGridSize, cornerCellToXY, cornerCellFromXY, resolvePlane } from '../modules/scene.js';
+import { rotatedGridSize, cornerCellToXY, cornerCellFromXY, resolvePlane, VIEW, viewPct, viewXY } from '../modules/scene.js';
 import { furnitureArt } from '../modules/furnitureArt.js';
 
 /**
@@ -19,6 +19,7 @@ export function FurnitureItem({
   const size = rotatedGridSize(furniture, rot);
   const plane = resolvePlane(placement, furniture);
   const pt = cornerCellToXY(plane, placement.gx ?? 0, placement.gy ?? 0, size.w, size.h);
+  const pc = viewPct(pt.x, pt.y);
   const isWall = furniture.placement === 'wall';
   const wallSide = plane === 'leftWall' ? 'left' : 'right';
 
@@ -28,10 +29,11 @@ export function FurnitureItem({
     + ` ${dragging ? 'is-dragging' : ''}`
     + ` ${waterLevel > 0.5 ? 'is-warm' : ''}`
     + ` ${hasEvent ? 'has-event' : ''}`;
-  el.style.left = `${(pt.x / SCENE.width) * 100}%`;
-  el.style.top = `${(pt.y / SCENE.height) * 100}%`;
-  el.style.width = `${furniture.footprint.w}px`;
-  el.style.height = `${furniture.footprint.h}px`;
+  el.style.left = `${pc.left}%`;
+  el.style.top = `${pc.top}%`;
+  // 格子單位：寬佔 VIEW 比例＋本體比例撐高，全螢幕尺寸一致
+  el.style.width = `${(furniture.footprint.w / VIEW.w) * 100}%`;
+  el.style.aspectRatio = `${furniture.footprint.w} / ${furniture.footprint.h}`;
   el.style.zIndex = String(selected ? 999 : (depth ?? 10));
   el.dataset.pid = placement.id;
 
@@ -108,11 +110,7 @@ function escapeHtml(s) {
 function toSceneXY(el, clientX, clientY, offsetX, offsetY) {
   const scene = el.closest('.room-scene__viewport');
   if (!scene) return null;
-  const sRect = scene.getBoundingClientRect();
-  return {
-    x: ((clientX - offsetX - sRect.left) / sRect.width) * SCENE.width,
-    y: ((clientY - offsetY - sRect.top) / sRect.height) * SCENE.height,
-  };
+  return viewXY(scene.getBoundingClientRect(), clientX, clientY, offsetX, offsetY);
 }
 
 function attachCornerDrag(el, furniture, size, placement, plane, { onMove, onDragHint }) {
@@ -135,8 +133,9 @@ function attachCornerDrag(el, furniture, size, placement, plane, { onMove, onDra
     el.dataset.moved = '1';
     const pt = toSceneXY(el, clientX, clientY, dragState.offsetX, dragState.offsetY);
     if (!pt) return;
-    el.style.left = `${(pt.x / SCENE.width) * 100}%`;
-    el.style.top = `${(pt.y / SCENE.height) * 100}%`;
+    const pc = viewPct(pt.x, pt.y);
+    el.style.left = `${pc.left}%`;
+    el.style.top = `${pc.top}%`;
     el.classList.add('is-dragging');
     const cell = cornerCellFromXY(plane, pt.x, pt.y, size.w, size.h);
     const center = cornerCellToXY(plane, cell.gx, cell.gy, size.w, size.h);

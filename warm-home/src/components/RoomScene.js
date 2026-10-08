@@ -1,5 +1,5 @@
 import {
-  SCENE, GRID, CORNER, rotatedGridSize, cornerCellToXY,
+  GRID, CORNER, VIEW, rotatedGridSize, cornerCellToXY,
   cornerDepth, cornerPolygons, resolvePlane,
 } from '../modules/scene.js';
 import { FurnitureItem } from './FurnitureItem.js';
@@ -32,7 +32,7 @@ export function RoomScene({
 
   root.innerHTML = `
     <div class="room-scene__viewport">
-      <svg class="corner-svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <svg class="corner-svg" viewBox="${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
         <defs>
           <linearGradient id="cw-lw" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stop-color="#FAF4EB"/><stop offset="100%" stop-color="#E1D3C1"/>
@@ -124,9 +124,8 @@ export function RoomScene({
     e.stopPropagation();
     const rect = viewport.getBoundingClientRect();
     if (!e.clientX && e.clientX !== 0) { onSelect(null); return; }
-    const sx = ((e.clientX - rect.left) / rect.width) * SCENE.width;
-    const sy = ((e.clientY - rect.top) / rect.height) * SCENE.height;
-    const scale = rect.width / SCENE.width; // px per unit
+    const sx = ((e.clientX - rect.left) / rect.width) * VIEW.w + VIEW.x;
+    const sy = ((e.clientY - rect.top) / rect.height) * VIEW.h + VIEW.y;
     let best = null;
     let bestD = Infinity;
     for (const p of placements) {
@@ -135,8 +134,9 @@ export function RoomScene({
       const plane = resolvePlane(p, f);
       const size = rotatedGridSize(f, p.rotation || 0);
       const c = cornerCellToXY(plane, p.gx ?? 0, p.gy ?? 0, size.w, size.h);
-      const hw = (f.footprint.w / 2) / scale;
-      const hh = (f.footprint.h / 2) / scale;
+      // footprint 已是格子單位：盒半徑直接用，不再除 scale
+      const hw = f.footprint.w / 2;
+      const hh = f.footprint.h / 2;
       // 視覺中心：地板腳落地（盒底＝格心），牆飾置中
       const cy = plane === 'floor' ? c.y - hh : c.y;
       if (Math.abs(sx - c.x) > hw || Math.abs(sy - cy) > hh) continue;
@@ -217,4 +217,4 @@ function dropSVG(dropHint) {
   return `<g class="${cls}"><ellipse cx="${Math.round(cx)}" cy="${Math.round(cy)}" rx="52" ry="22"/><text x="${Math.round(cx)}" y="${Math.round(cy + 5)}">${ok ? '放這裡' : '被佔走了'}</text></g>`;
 }
 
-export { SCENE };
+export { VIEW };
