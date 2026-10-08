@@ -42,15 +42,20 @@ import {
   findFreeCellAuto,
   cornerCellToXY,
   resolvePlane,
+  setRoomLevel,
+  snapshotGrids,
+  migratePlacementsToGrids,
 } from './modules/scene.js';
 import { rollClickInteraction, rollIdleEvent, isCoolingDown } from './modules/interactions.js';
+import { XP_RULES, LEVELS, levelForXp, nextLevelInfo, isUnlocked, getXp, getRoomLevel, addXp } from './modules/levels.js';
 
 /**
- * App Controller — Warm Home v0.2
+ * App Controller — Warm Home v0.7
  * ─────────────────────────────
- * 1) 格線擺放（地板 8×4 / 牆面 8×2，吸附+防重疊+旋轉）
+ * 1) 等比格線擺放（等級房間，吸附+防重疊+旋轉）
  * 2) 每日 3 任務 + 心情紀錄 → 拍立得 → IG 式日記
  * 3) 隨機互動：點擊語錄 + 閒置事件泡泡
+ * 4) 等級：賺 XP → 房間變大格＋解鎖新家具
  */
 
 export async function mountApp(container) {
@@ -74,10 +79,16 @@ export async function mountApp(container) {
     activeTask: null,
     pendingMoodTask: null,
     showOnboarding: false,
+    roomLevel: 1,
+    xp: 0,
     layers: {},
   };
 
   await ensureInstallDate();
+  // 等級房間先就位（格線數學全跟著走）
+  ctx.roomLevel = await getRoomLevel();
+  ctx.xp = await getXp();
+  setRoomLevel(ctx.roomLevel);
   await ensureDefaultFurniture();
   await reloadAll(ctx);
   // 版本遷移（v3 起：角落座標重算；未來 v4+ 照 migrations.js 加）
@@ -193,6 +204,7 @@ function renderShell(ctx) {
     </nav>
   `;
   document.getElementById('date-line').textContent = todayKey();
+  renderLevelLine(ctx);
   ctx.layers.sceneHost = document.getElementById('scene-host');
   ctx.layers.modalHost = document.getElementById('modal-host');
   ctx.layers.photoHost = document.getElementById('photo-host');
@@ -236,6 +248,43 @@ function renderTaskBar(ctx) {
     const done = ctx.completedTemplateIds.size;
     btn.innerHTML = `📋 今日任務 <span style="opacity:0.7;">(${done}/${ctx.todayTasks.length})</span>`;
   }
+  renderLevelLine(ctx);
+}
+
+/** 標題下小字：日期＋等級經驗 */
+function renderLevelLine(ctx) {
+  const el = document.getElementById('date-line');
+  if (!el) return;
+  const { cur, next } = nextLevelInfo(ctx.xp);
+  const lvName = LEVELS.find((l) => l.level === ctx.roomLevel)?.name || '';
+  el.textContent = next
+    ? `${todayKey()} · Lv${ctx.roomLevel}${lvName ? ` ${lvName}` : ''} ${ctx.xp}/${next.xp}XP`
+    : `${todayKey()} · Lv${ctx.roomLevel}${lvName ? ` ${lvName}` : ''} MAX`;
+}
+
+/* ============ 經驗＋升級 ============ */
+
+async function awardXP(ctx, amount, reason) {
+  const r = await addXp(amount);
+  ctx.xp = r.xp;
+  if (!r.leveledUp) {
+    renderLevelLine(ctx);
+    return;
+  }
+  // 升級：房間變大格，家具等比搬家
+  const oldShapes = snapshotGrids();
+  ctx.roomLevel = r.newLevel;
+  setRoomLevel(r.newLevel);
+  const moved = migratePlacementsToGrids(ctx.placements, ctx.furnitureMap, oldShapes);
+  for (const m of moved) {
+    await updatePlacement(m.id, { plane: m.plane, gx: m.gx, gy: m.gy, x: m.x, y: m.y, rotation: m.rotation });
+  }
+  await reloadAll(ctx);
+  renderScene(ctx);
+  renderTaskBar(ctx);
+  celebrate();
+  const lvName = LEVELS.find((l) => l.level === r.newLevel)?.name || '';
+  flashSuccess({ title: `升級 Lv${r.newLevel} ${lvName}！房間變大了，還有新家具可領` });
 }
 
 function renderPhotoPanel(ctx) {
@@ -435,6 +484,7 @@ async function handleEventTap(ctx, placementId) {
     celebrate();
     renderScene(ctx);
     flashSuccess({ title: evt.text });
+    await awardXP(ctx, XP_RULES.EVENT, 'event');
     return;
   }
   // 非事件泡泡：當一般選取
@@ -562,10 +612,12 @@ async function finishTask(ctx, moodFromModal) {
   ctx.layers.photoHost.innerHTML = '';
   ctx.lastIdleAt = Date.now();
 
+  // 經驗：任務＋拍照加成＋心情（升級橫幅最後跳，才不會被蓋掉）
   await reloadAll(ctx);
   renderScene(ctx);
   renderTaskBar(ctx);
   flashSuccess(task);
+  await awardXP(ctx, XP_RULES.TASK_DONE + (task.needsPhoto ? XP_RULES.PHOTO_BONUS : 0) + (mood ? XP_RULES.MOOD : 0), 'task');
 }
 
 function flashSuccess(task) {
@@ -592,9 +644,14 @@ function openCatalog(ctx) {
       furnitureCatalog: ctx.furnitureCatalog,
       furnitureMap: ctx.furnitureMap,
       warehouse: ctx.warehouse || [],
+      playerLevel: ctx.roomLevel,
       onPick: async (furnitureId) => {
         const f = ctx.furnitureMap[furnitureId];
         if (!f) return;
+        if (!isUnlocked(f, ctx.roomLevel)) {
+          flashHint(`「${f.label}」Lv${f.unlockLevel || 1} 解鎖，做任務賺經驗吧！`);
+          return;
+        }
         // 自動找空格（牆飾自動挑比較空的那面牆）
         const spot = findFreeCellAuto(ctx.placements, ctx.furnitureMap, f);
         if (!spot) {
@@ -851,6 +908,6 @@ async function ensureInstallDate() {
   const exists = await getMeta('installDate');
   if (!exists) {
     await setMeta('installDate', new Date().toISOString());
-    await setMeta('phase', '0.5.0');
+    await setMeta('phase', '0.7.0');
   }
 }

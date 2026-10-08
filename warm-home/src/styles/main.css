@@ -662,6 +662,8 @@ button { font-family: inherit; }
 
 /* 倉庫暫存款：虛線框區分 */
 .catalog__item--stored { border: 2px dashed var(--color-accent); }
+/* 未解鎖：灰階＋鎖 */
+.catalog__item.is-locked { opacity: 0.55; filter: grayscale(0.8); }
 
 /* ============================================================
  * v0.5 3D 手繪家具（取代 emoji 本體）
@@ -695,7 +697,7 @@ button { font-family: inherit; }
   animation: eventShake 0.8s ease infinite;
 }
 .room-scene--corner .mini-toolbar {
-  position: absolute; top: -72px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: calc(100% + 26px); left: 50%; transform: translateX(-50%);
   display: flex; gap: 8px; background: #fff; padding: 6px 10px;
   border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 72;
   pointer-events: auto;
@@ -707,3 +709,9 @@ button { font-family: inherit; }
 }
 .room-scene--corner .tool-btn--danger { background: #FFEBEE; }
 .room-scene--corner .room__hint { bottom: 8px; }
+
+/* Debug 疊層（?debug=1）：格心紅點＋家具藍框＋錨點十字 */
+.corner-svg .debug { pointer-events: none; }
+.corner-svg .dbg-dot { fill: none; stroke: #E53935; stroke-width: 1.5; }
+.corner-svg .dbg-box { fill: rgba(30, 136, 229, 0.08); stroke: #1E88E5; stroke-width: 1.5; stroke-dasharray: 4 3; }
+.corner-svg .dbg-cross { stroke: #E53935; stroke-width: 2; }

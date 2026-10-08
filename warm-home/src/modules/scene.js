@@ -22,7 +22,7 @@ export const SCENE = { width: 800, height: 600 };
  * 避免 letterbox 錯位（v0.6.5 之前容器 3:4、畫布 800×600，家具全飄移）。
  * 範圍含高家具頂部空間（後排床頂約 y=-110）。
  */
-export const VIEW = { x: 246, y: -150, w: 460, h: 690 };
+export const VIEW = { x: 244, y: -170, w: 460, h: 690 };
 
 /** 畫布座標 → 容器百分比（FurnitureItem 定位用） */
 export function viewPct(x, y) {
@@ -42,9 +42,41 @@ export function viewXY(rect, clientX, clientY, offsetX = 0, offsetY = 0) {
 
 export const GRID = {
   floor: { cols: 10, rows: 5 },
-  leftWall: { cols: 5, rows: 2 },
-  rightWall: { cols: 10, rows: 2 },
+  leftWall: { cols: 5, rows: 3 },
+  rightWall: { cols: 10, rows: 3 },
 };
+
+/**
+ * 等級房間（房間變大＝格子變密，畫布不動、不捲動）
+ * ─────────────────────────────────────────────
+ * Lv1 小暖窩 → Lv2 大客廳 → Lv3 大宅，永遠保持 1:2 等比。
+ * GRID 隨 setRoomLevel() 切換（讀取端零改動）；verify 可逐級檢查。
+ */
+export const LEVEL_GRIDS = {
+  1: { floor: { cols: 10, rows: 5 }, leftWall: { cols: 5, rows: 3 }, rightWall: { cols: 10, rows: 3 } },
+  2: { floor: { cols: 14, rows: 7 }, leftWall: { cols: 7, rows: 4 }, rightWall: { cols: 14, rows: 4 } },
+  3: { floor: { cols: 20, rows: 10 }, leftWall: { cols: 10, rows: 5 }, rightWall: { cols: 20, rows: 5 } },
+};
+
+let ACTIVE_LEVEL = 1;
+export function setRoomLevel(level) {
+  const g = LEVEL_GRIDS[level] || LEVEL_GRIDS[1];
+  ACTIVE_LEVEL = LEVEL_GRIDS[level] ? level : 1;
+  GRID.floor = { ...g.floor };
+  GRID.leftWall = { ...g.leftWall };
+  GRID.rightWall = { ...g.rightWall };
+  return ACTIVE_LEVEL;
+}
+export function getRoomLevel() {
+  return ACTIVE_LEVEL;
+}
+export function snapshotGrids() {
+  return {
+    floor: { ...GRID.floor },
+    leftWall: { ...GRID.leftWall },
+    rightWall: { ...GRID.rightWall },
+  };
+}
 
 export const PLANES = ['floor', 'leftWall', 'rightWall'];
 
@@ -78,22 +110,21 @@ export function rotatedGridSize(furniture, rotation = 0) {
 }
 
 /* ============================================================
- * 角落透視（與桌面 try.html 同座標）
+ * 角落透視（直式畫布 v0.7：牆加高填滿 10:15）
  *   O   = (400,220) 後方角（兩牆與地板交會）
  *   R   = (288,144) 地板右緣（10 格）
  *   L   = (-144,72) 地板左緣（5 格）
- *   V   = (0,120)   牆高（2 格）
- *   TOP = (400,100) 上方角
- * 每步格向量：R/10 = (28.8,14.4)，L/5 = (-28.8,14.4) —— 等長，
- * 左右牆列向量與地板共用邊向量完全相同 → 比例一致。
+ *   V   = (0,380)   牆高（3 格，每格約 127）
+ *   TOP = (400,-160) 上方角
+ * 每步格向量：R/10、L/5、左牆列 L/5、右牆列 R/10 —— 全部等長。
  * ============================================================ */
 
 export const CORNER = {
   O: { x: 400, y: 220 },
   R: { x: 288, y: 144 },
   L: { x: -144, y: 72 },
-  V: { x: 0, y: 120 },
-  TOP: { x: 400, y: 100 },
+  V: { x: 0, y: 380 },
+  TOP: { x: 400, y: -160 },
 };
 
 export function floorCellCenter(gx, gy, gw = 1, gh = 1) {
@@ -167,17 +198,26 @@ export function cornerDepth(plane, gx, gy, gw = 1, gh = 1) {
   return ((gx + gw / 2) / g.cols) + (((gy + gh / 2) / g.rows) * 2);
 }
 
-/** 角落房多邊形（SVG 用，與桌面 try.html 同座標） */
+/** 角落房多邊形（全部由 CORNER 算出，改 TOP/V 自動跟著變） */
 export function cornerPolygons() {
+  const { O, R, L, V, TOP } = CORNER;
+  const P = (x, y) => `${Math.round(x)},${Math.round(y)}`;
+  const leftWall = [O, [O.x + L.x, O.y + L.y], [TOP.x + L.x, TOP.y + L.y], TOP];
+  const rightWall = [O, [O.x + R.x, O.y + R.y], [TOP.x + R.x, TOP.y + R.y], TOP];
+  const leftTop0 = TOP, leftTop1 = [TOP.x + L.x, TOP.y + L.y];
+  const rightTop1 = [TOP.x + R.x, TOP.y + R.y];
   return {
-    leftWall: '400,220 256,292 256,172 400,100',
-    rightWall: '400,220 688,364 688,244 400,100',
-    floor: '400,220 688,364 544,436 256,292',
+    leftWall: leftWall.map(([x, y]) => P(x, y)).join(' '),
+    rightWall: rightWall.map(([x, y]) => P(x, y)).join(' '),
+    floor: [O, [O.x + R.x, O.y + R.y], [O.x + R.x + L.x, O.y + R.y + L.y], [O.x + L.x, O.y + L.y]].map(([x, y]) => P(x, y)).join(' '),
     baseLeft: '256,292 400,364 400,382 256,310',
     baseRight: '400,364 688,220 688,238 400,382',
     baseFront: '256,292 400,364 544,292 544,310 400,382 256,310',
     skirtLeft: '400,220 256,292 256,284 400,212',
     skirtRight: '400,220 688,364 688,356 400,212',
+    trimLeft: [leftTop0, leftTop1, [leftTop1[0], leftTop1[1] + 5], [leftTop0[0], leftTop0[1] + 5]].map(([x, y]) => P(x, y)).join(' '),
+    trimRight: [TOP, rightTop1, [rightTop1[0], rightTop1[1] + 5], [TOP[0], TOP[1] + 5]].map(([x, y]) => P(x, y)).join(' '),
+    cornerLine: { x1: TOP.x, y1: TOP.y, x2: O.x, y2: O.y },
   };
 }
 
@@ -242,11 +282,8 @@ export function findFreeCell(placements, furnitureMap, furniture, plane) {
   const { w, h } = rotatedGridSize(furniture, 0);
   if (w > g.cols || h > g.rows) return null;
   const rows = [];
-  if (pl === 'floor') {
-    for (let y = g.rows - h; y >= 0; y--) rows.push(y);
-  } else {
-    for (let y = 0; y <= g.rows - h; y++) rows.push(y);
-  }
+  // 由下往上找：地板靠近前排、牆飾靠近視線高度，看起來自然
+  for (let y = g.rows - h; y >= 0; y--) rows.push(y);
   const colOrder = centerOut(g.cols - w);
   for (const gy of rows) {
     for (const gx of colOrder) {
@@ -321,4 +358,50 @@ export function migrateToGrid(p, furnitureMap) {
   const { w, h } = rotatedGridSize(f, p.rotation || 0);
   const cell = cornerCellFromXY(plane, p.x ?? 400, p.y ?? 300, w, h);
   return { ...p, plane, gx: cell.gx, gy: cell.gy };
+}
+
+/**
+ * 跨級搬家（升級房間時用）：舊格 → 新格等比映射＋夾取＋碰撞排解。
+ * 純函式（不碰 DB），回傳 [{ id, plane, gx, gy }]，由呼叫端寫入。
+ */
+export function migratePlacementsToGrids(placements, furnitureMap, oldShapes) {
+  const out = [];
+  // 先算目標（用目前 GRID＝新等級）
+  const targets = placements.map((p) => {
+    const f = furnitureMap[p.furnitureId];
+    if (!f) return null;
+    const plane = resolvePlane(p, f);
+    const size = rotatedGridSize(f, p.rotation || 0);
+    const old = oldShapes[plane] || oldShapes.floor;
+    const now = getGridShape(plane);
+    let gx = Math.round((p.gx ?? 0) * (now.cols / old.cols));
+    let gy = Math.round((p.gy ?? 0) * (now.rows / old.rows));
+    gx = Math.max(0, Math.min(now.cols - size.w, gx));
+    gy = Math.max(0, Math.min(now.rows - size.h, gy));
+    return { p, f, plane, size, gx, gy };
+  }).filter(Boolean);
+  // 依序卡位，撞到就近找空格（比較基準一律用新格座標）
+  for (const t of targets) {
+    let { gx, gy } = t;
+    const view = targets
+      .filter((o) => o.p.id !== t.p.id)
+      .map((o) => {
+        const done = out.find((d) => d.id === o.p.id);
+        return done
+          ? { id: o.p.id, furnitureId: o.p.furnitureId, plane: done.plane, gx: done.gx, gy: done.gy, rotation: o.p.rotation || 0 }
+          : { id: o.p.id, furnitureId: o.p.furnitureId, plane: o.plane, gx: o.gx, gy: o.gy, rotation: o.p.rotation || 0 };
+      });
+    if (!isAreaFree(view, furnitureMap, t.p.id, t.plane, gx, gy, t.size.w, t.size.h)) {
+      const free = findFreeCell(view, furnitureMap, t.f, t.plane)
+        || (t.plane !== 'floor' ? findFreeCell(view, furnitureMap, t.f, t.plane === 'leftWall' ? 'rightWall' : 'leftWall') : null);
+      if (free) {
+        t.plane = free.plane;
+        gx = free.gx;
+        gy = free.gy;
+      }
+    }
+    const pt = cornerCellToXY(t.plane, gx, gy, t.size.w, t.size.h);
+    out.push({ id: t.p.id, furnitureId: t.p.furnitureId, plane: t.plane, gx: pt.gx, gy: pt.gy, x: pt.x, y: pt.y, rotation: t.p.rotation || 0 });
+  }
+  return out;
 }

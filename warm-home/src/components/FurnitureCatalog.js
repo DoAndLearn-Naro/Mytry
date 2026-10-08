@@ -5,8 +5,9 @@
  */
 
 import { furnitureArt } from '../modules/furnitureArt.js';
+import { isUnlocked } from '../modules/levels.js';
 
-export function FurnitureCatalog({ furnitureCatalog, furnitureMap, warehouse = [], onPick, onTakeOut, onClose }) {
+export function FurnitureCatalog({ furnitureCatalog, furnitureMap, warehouse = [], playerLevel = 1, onPick, onTakeOut, onClose }) {
   const root = document.createElement('div');
   root.className = 'catalog';
 
@@ -46,14 +47,14 @@ export function FurnitureCatalog({ furnitureCatalog, furnitureMap, warehouse = [
     <details class="catalog__group" open>
       <summary>🪑 地板家具（${floor.length}）</summary>
       <div class="catalog__grid">
-        ${floor.map((f) => itemHTML(f)).join('')}
+        ${floor.map((f) => itemHTML(f, playerLevel)).join('')}
       </div>
     </details>
 
     <details class="catalog__group">
       <summary>🖼️ 牆面家具（${wall.length}）</summary>
       <div class="catalog__grid">
-        ${wall.map((f) => itemHTML(f)).join('')}
+        ${wall.map((f) => itemHTML(f, playerLevel)).join('')}
       </div>
     </details>
 
@@ -80,13 +81,14 @@ export function FurnitureCatalog({ furnitureCatalog, furnitureMap, warehouse = [
   return root;
 }
 
-function itemHTML(f) {
+function itemHTML(f, playerLevel = 1) {
   const gs = f.gridSize ? `${f.gridSize.w}×${f.gridSize.h}格` : '';
+  const locked = !isUnlocked(f, playerLevel);
   return `
-    <button class="catalog__item" data-id="${f.id}" type="button">
+    <button class="catalog__item ${locked ? 'is-locked' : ''}" data-id="${f.id}" type="button">
       <span class="catalog__art" aria-hidden="true">${furnitureArt(f.id)}</span>
-      <span class="catalog__label">${f.label}</span>
-      ${gs ? `<span class="catalog__label" style="opacity:0.6;font-weight:400;">${gs}</span>` : ''}
+      <span class="catalog__label">${locked ? `🔒Lv${f.unlockLevel}` : f.label}</span>
+      ${gs && !locked ? `<span class="catalog__label" style="opacity:0.6;font-weight:400;">${gs}</span>` : ''}
     </button>
   `;
 }

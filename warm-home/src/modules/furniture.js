@@ -5,7 +5,8 @@
  * {
  *   id, label, emoji, category, placement: 'floor'|'wall',
  *   footprint: { w, h },      // 格子單位（畫布座標，跟著房間等比縮放，全螢幕一致）
- *   gridSize: { w, h },       // 格子佔位（地板 10×5 / 左牆 5×2 / 右牆 10×2）
+ *   gridSize: { w, h },       // 格子佔位（Lv1: 地板 10×5 / 左牆 5×3 / 右牆 10×3）
+ *   unlockLevel: 1,           // 幾等解鎖（缺失視為 Lv1）
  *   tasks: [{ id, icon, title, prompt, needsPhoto, water }],
  *   chatter: ['點我時隨機說的話', ...],   // 點擊隨機互動用
  * }
@@ -122,6 +123,7 @@ export const DEFAULT_FURNITURE = [
     placement: 'floor',
     footprint: { w: 68, h: 81 },
     gridSize: { w: 1, h: 1 },
+    unlockLevel: 2,
     tasks: [
       { id: 'rock-relax', icon: '🍃', title: '搖椅上深呼吸 5 次', prompt: '坐在搖椅上輕輕搖，慢慢深呼吸 5 次。', needsPhoto: false, water: 1 },
       { id: 'rock-photo', icon: '📸', title: '拍搖椅旁的光影', prompt: '拍一張搖椅旁灑進來的光。', needsPhoto: true, water: 1 },
@@ -136,6 +138,7 @@ export const DEFAULT_FURNITURE = [
     placement: 'floor',
     footprint: { w: 136, h: 132 },
     gridSize: { w: 3, h: 1 },
+    unlockLevel: 2,
     tasks: [
       { id: 'tea-drink', icon: '🍵', title: '泡一壺茶慢慢喝', prompt: '泡一壺茶，和家人或自己慢慢喝。', needsPhoto: false, water: 1 },
       { id: 'tea-photo', icon: '📸', title: '拍今天的茶具', prompt: '把茶具擺好，拍一張照片。', needsPhoto: true, water: 1 },
@@ -214,6 +217,7 @@ export function normalizeFurniture(raw) {
     placement: raw.placement === 'wall' ? 'wall' : 'floor',
     footprint: raw.footprint || { w: 100, h: 100 },
     gridSize: raw.gridSize || { w: 1, h: 1 },
+    unlockLevel: raw.unlockLevel || 1,
     tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
     chatter: Array.isArray(raw.chatter) ? raw.chatter : [],
     builtin: false,

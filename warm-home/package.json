@@ -1,6 +1,6 @@
 {
   "name": "warm-home",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "暖窩 Warm Home：角落式 3D 房間擺設，格線拖移 + 每日任務 + 暖窩日記 PWA",

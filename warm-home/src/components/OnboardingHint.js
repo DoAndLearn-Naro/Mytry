@@ -28,7 +28,8 @@ export function OnboardingHint({ onDismiss }) {
       <li>點一件家具 → 它會自己進到房間格子</li>
       <li>拖移換格子、↻ 旋轉、🗑️ 收回倉庫</li>
       <li>每天會從你擺的家具裡挑出 <strong>3 個小任務</strong></li>
-      <li>每完成一個 → 一張拍立得貼到 📖 日記</li>
+      <li>每完成一個 → 一張拍立得貼到 📖 日記，還賺經驗</li>
+      <li>經驗夠多會<strong>升級</strong>：房間變大格，還解鎖新家具</li>
       <li>用瀏覽器「<strong>加入主畫面</strong>」，以後沒網路也能開，資料都存在手機裡</li>
     </ol>
     <button class="btn btn--primary" data-act="ok">開始佈置</button>
