@@ -9,11 +9,13 @@
  */
 
 const SQ = 0.8660254; // cos30
+/** 垂直拉伸：等角投影 z 原生 1:1 看起來太矮胖，拉高讓家具有高度 */
+export const Z_SCALE = 1.32;
 let __uid = 0;
 
-/** 等角投影（z 朝上） */
+/** 等角投影（z 朝上，已拉伸） */
 function iso(x, y, z) {
-  return [(x - y) * SQ, (x + y) * 0.5 - z];
+  return [(x - y) * SQ, (x + y) * 0.5 - z * Z_SCALE];
 }
 
 function createPainter() {
@@ -66,9 +68,13 @@ function createPainter() {
     gradient(id, stops) {
       defs.push(`<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${stops.map(([o, c]) => `<stop offset="${o}%" stop-color="${c}"/>`).join('')}</linearGradient>`);
     },
+    /** 接地陰影：畫在 z=0 地面上（先畫、墊底），對齊桌腳解決懸空感 */
+    ground(cx, cy, r, opacity = 0.3) {
+      const c = iso(cx, cy, 0);
+      api.ellipse(c[0], c[1] + 0.12, r * SQ, r * 0.5, '#3E2723', 'none', 0, 0, opacity);
+    },
     /** 等角方塊：base 角 (x,y) 高 z，寬 w（右下）深 d（左下）高 h */
-    box(x, y, z, w, d, h, c) {
-      const e = c.edge || '#3E2723';
+    box(x, y, z, w, d, h, c) {      const e = c.edge || '#3E2723';
       api.poly([iso(x, y, z + h), iso(x + w, y, z + h), iso(x + w, y + d, z + h), iso(x, y + d, z + h)], c.top, e, 1.2);
       api.poly([iso(x, y + d, z), iso(x + w, y + d, z), iso(x + w, y + d, z + h), iso(x, y + d, z + h)], c.left, e, 1.2);
       api.poly([iso(x + w, y, z), iso(x + w, y + d, z), iso(x + w, y + d, z + h), iso(x + w, y, z + h)], c.right, e, 1.2);
@@ -95,6 +101,7 @@ const WHITE = { top: '#FFFDF7', left: '#F1EAD8', right: '#D8CDB2', edge: '#8D7B5
 const DRAW = {
   /* 床 3×2：底座＋床墊＋棉被＋雙枕 */
   bed(p) {
+    p.ground(2.5, 1.7, 2.9);
     p.box(0, 0, 0.5, 5, 3.4, 0.9, WOOD_D);          // 床架
     p.box(0.15, 0.15, 1.4, 4.7, 3.1, 0.7, WHITE);    // 床墊
     p.box(0.15, 1.5, 2.1, 4.7, 1.75, 0.35, { top: '#C36C44', left: '#A8552F', right: '#7E3E20', edge: '#5D2812' }); // 棉被
@@ -104,6 +111,7 @@ const DRAW = {
   },
   /* 沙發 2×1：椅座＋椅背＋扶手＋抱枕 */
   sofa(p) {
+    p.ground(2, 1, 2.4);
     [[0.2, 0.2], [3.5, 0.2], [0.2, 1.5], [3.5, 1.5]].forEach(([x, y]) => p.box(x, y, 0, 0.3, 0.3, 0.6, WOOD_D));
     p.box(0, 0, 0.6, 4, 2, 1.0, FABRIC);
     p.box(0, 0, 1.0, 4, 0.6, 1.8, FABRIC_D);          // 椅背
@@ -114,6 +122,7 @@ const DRAW = {
   },
   /* 書桌 2×1：桌面＋桌腳＋抽屜＋書 */
   desk(p) {
+    p.ground(2, 1, 2.4);
     [[0.2, 0.2], [3.55, 0.2], [0.2, 1.55], [3.55, 1.55]].forEach(([x, y]) => p.box(x, y, 0, 0.25, 0.25, 2.2, WOOD_D));
     p.box(0, 0, 2.2, 4, 2, 0.25, WOOD);
     p.box(2.3, 1.5, 1.2, 1.4, 0.45, 0.7, WOOD_D);     // 抽屜
@@ -124,6 +133,7 @@ const DRAW = {
   },
   /* 植物 1×1：陶盆＋三株葉 */
   plant(p) {
+    p.ground(0.8, 0.8, 1.15);
     p.box(0, 0, 0, 1.6, 1.6, 1.0, POT);
     p.poly([p.P(0.28, 0.28, 1.0), p.P(1.32, 0.28, 1.0), p.P(1.32, 1.32, 1.0), p.P(0.28, 1.32, 1.0)], '#4E342E');
     const tops = [[0.8, 0.45, 2.7, -25], [0.45, 0.95, 2.45, -55], [1.15, 0.95, 2.55, 30]];
@@ -135,6 +145,7 @@ const DRAW = {
   },
   /* 立燈 1×1：底座＋燈桿＋燈罩＋光暈 */
   lamp(p) {
+    p.ground(1, 1, 1.0);
     const g = p.P(1, 1, 3.4);
     p.circle(g[0], g[1], 1.7, '#FFE9A8', 'none', 1, 0.28);
     p.box(0.4, 0.4, 0, 1.2, 1.2, 0.25, WOOD_D);
@@ -146,6 +157,7 @@ const DRAW = {
   },
   /* 椅子 1×1 */
   chair(p) {
+    p.ground(0.9, 0.9, 1.3);
     [[0.15, 0.15], [1.4, 0.15], [0.15, 1.4], [1.4, 1.4]].forEach(([x, y]) => p.box(x, y, 0, 0.22, 0.22, 1.2, WOOD_D));
     p.box(0, 0, 1.2, 1.8, 1.8, 0.35, WOOD);
     p.box(0.1, 0.05, 1.55, 0.18, 0.2, 1.7, WOOD_D);
@@ -154,6 +166,7 @@ const DRAW = {
   },
   /* 杯子 1×1：小圓桌＋杯盤＋蒸氣 */
   cup(p) {
+    p.ground(1, 1, 1.35);
     p.box(0.8, 0.8, 0, 0.4, 0.4, 1.1, WOOD_D);
     const c = p.P(1, 1, 1.3);
     p.ellipse(c[0], c[1], 1.25, 0.68, WOOD.top, WOOD_D.edge, 0.1);
@@ -170,6 +183,7 @@ const DRAW = {
   },
   /* 搖椅 1×1：椅身＋弧形搖杆 */
   'rocking-chair'(p) {
+    p.ground(1, 1, 1.5);
     const r0 = p.P(0.05, 0.35, 0.28), r1 = p.P(1.0, 1.0, -0.1), r2 = p.P(1.95, 1.65, 0.28);
     p.path(`M ${r0[0]} ${r0[1]} Q ${r1[0]} ${r1[1]} ${r2[0]} ${r2[1]}`, '#5D3A20', 0.28, 'none', [r0[0] - 0.3, r1[1] - 0.3, r2[0] + 0.3, r0[1] + 0.3]);
     p.box(0.2, 0.4, 0.85, 1.6, 1.4, 0.3, WOOD);
@@ -181,7 +195,8 @@ const DRAW = {
   },
   /* 茶几 2×1：矮桌＋茶壺＋雙杯 */
   'tea-table'(p) {
-    [[0.2, 0.2], [3.55, 0.2], [0.2, 1.55], [3.55, 1.55]].forEach(([x, y]) => p.box(x, y, 0, 0.28, 0.28, 1.0, WOOD_D));
+    p.ground(2, 1, 2.4);
+    [[0.2, 0.2], [3.52, 0.2], [0.2, 1.52], [3.52, 1.52]].forEach(([x, y]) => p.box(x, y, 0, 0.34, 0.34, 1.0, WOOD_D));
     p.box(0, 0, 1.0, 4, 2, 0.3, WOOD_D);
     const t = p.P(1.1, 1.0, 1.75);
     p.ellipse(t[0], t[1], 0.55, 0.46, '#F5F0E6', '#8D7B5F', 0.09);

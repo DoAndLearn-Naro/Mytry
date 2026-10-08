@@ -39,7 +39,6 @@ export function FurnitureItem({
 
   if (!isWall) {
     el.innerHTML = `
-      <div class="floor-shadow" aria-hidden="true"></div>
       <div class="furniture__art" aria-hidden="true">${art}</div>
       <div class="furniture__tag">${furniture.label}</div>
       <div class="furniture__warmth" style="--warm:${waterLevel};" aria-hidden="true"></div>
