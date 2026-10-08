@@ -27,11 +27,28 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install dependencies
+      - name: Install life-garden dependencies
         run: npm ci
+        working-directory: life-garden
 
-      - name: Build (Vite + PWA)
+      - name: Build life-garden
         run: npm run build
+        working-directory: life-garden
+
+      - name: Install warm-home dependencies
+        run: npm ci
+        working-directory: warm-home
+
+      - name: Build warm-home
+        run: npm run build
+        working-directory: warm-home
+
+      - name: Assemble dist (life-garden + warm-home)
+        run: |
+          mkdir -p dist/life-garden
+          mkdir -p dist/warm-home
+          cp -r life-garden/dist/. dist/life-garden/
+          cp -r warm-home/dist/. dist/warm-home/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

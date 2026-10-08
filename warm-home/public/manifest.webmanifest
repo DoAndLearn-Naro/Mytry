@@ -1,0 +1,17 @@
+{
+  "name": "暖窩 Warm Home",
+  "short_name": "暖窩",
+  "description": "3/4 視角的房間擺設 PWA：拖移家具、迎接每日小任務。",
+  "lang": "zh-TW",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F7EFE0",
+  "theme_color": "#A47148",
+  "categories": ["health", "lifestyle"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
