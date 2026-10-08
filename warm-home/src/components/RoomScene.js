@@ -30,6 +30,24 @@ export function RoomScene({
   const root = document.createElement('div');
   root.className = 'room-scene room-scene--corner';
 
+  const PG = cornerPolygons();
+  const map = furnitureMap || Object.fromEntries(furnitureCatalog.map((f) => [f.id, f]));
+  const debug = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug');
+  if (debug) {
+    console.log('[暖窩 debug] VIEW', VIEW);
+    console.table(placements.map((p) => {
+      const f = map[p.furnitureId];
+      const plane = resolvePlane(p, f);
+      const size = f ? rotatedGridSize(f, p.rotation || 0) : { w: 1, h: 1 };
+      const pt = cornerCellToXY(plane, p.gx ?? 0, p.gy ?? 0, size.w, size.h);
+      return {
+        id: p.id, 家具: f ? f.label : p.furnitureId, 平面: plane,
+        格: `${p.gx},${p.gy} ${size.w}×${size.h}`, 像素: `${pt.x},${pt.y}`,
+        框: f ? `${f.footprint.w}×${f.footprint.h}` : '?',
+      };
+    }));
+  }
+
   root.innerHTML = `
     <div class="room-scene__viewport">
       <svg class="corner-svg" viewBox="${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
@@ -48,30 +66,30 @@ export function RoomScene({
           </linearGradient>
         </defs>
         <!-- 3D 模型地基底座 -->
-        <polygon points="${cornerPolygons().baseLeft}" fill="#8D6E63" stroke="#5D4037" stroke-width="1"/>
-        <polygon points="${cornerPolygons().baseRight}" fill="#6D4C41" stroke="#3E2723" stroke-width="1"/>
-        <polygon points="${cornerPolygons().baseFront}" fill="#5D4037"/>
+        <polygon points="${PG.baseLeft}" fill="#8D6E63" stroke="#5D4037" stroke-width="1"/>
+        <polygon points="${PG.baseRight}" fill="#6D4C41" stroke="#3E2723" stroke-width="1"/>
+        <polygon points="${PG.baseFront}" fill="#5D4037"/>
         <!-- 牆 + 地板本體 -->
-        <polygon points="${cornerPolygons().leftWall}" fill="url(#cw-lw)" stroke="#D4C4B2" stroke-width="1.5"/>
-        <polygon points="${cornerPolygons().rightWall}" fill="url(#cw-rw)" stroke="#D4C4B2" stroke-width="1.5"/>
-        <polygon points="${cornerPolygons().floor}" fill="url(#cw-fl)" stroke="#BFA894" stroke-width="1.5"/>
+        <polygon points="${PG.leftWall}" fill="url(#cw-lw)" stroke="#D4C4B2" stroke-width="1.5"/>
+        <polygon points="${PG.rightWall}" fill="url(#cw-rw)" stroke="#D4C4B2" stroke-width="1.5"/>
+        <polygon points="${PG.floor}" fill="url(#cw-fl)" stroke="#BFA894" stroke-width="1.5"/>
         <!-- 踢腳板 + 頂角線 -->
-        <polygon points="${cornerPolygons().skirtLeft}" fill="#8D6E63" opacity="0.85"/>
-        <polygon points="${cornerPolygons().skirtRight}" fill="#795548" opacity="0.85"/>
-        <polygon points="400,100 256,172 256,177 400,105" fill="#A1887F"/>
-        <polygon points="400,100 688,244 688,249 400,105" fill="#8D6E63"/>
+        <polygon points="${PG.skirtLeft}" fill="#8D6E63" opacity="0.85"/>
+        <polygon points="${PG.skirtRight}" fill="#795548" opacity="0.85"/>
+        <polygon points="${PG.trimLeft}" fill="#A1887F"/>
+        <polygon points="${PG.trimRight}" fill="#8D6E63"/>
         <!-- 角落陰影 -->
-        <polygon points="400,100 420,110 420,230 400,220" fill="url(#cw-corner)"/>
-        <line x1="400" y1="100" x2="400" y2="220" stroke="#4E342E" stroke-width="2" opacity="0.5"/>
+        <polygon points="${PG.cornerLine.x1},${PG.cornerLine.y1} ${PG.cornerLine.x1 + 20},${PG.cornerLine.y1 + 10} ${PG.cornerLine.x1 + 20},${PG.cornerLine.y2 + 10} ${PG.cornerLine.x2},${PG.cornerLine.y2}" fill="url(#cw-corner)"/>
+        <line x1="${PG.cornerLine.x1}" y1="${PG.cornerLine.y1}" x2="${PG.cornerLine.x2}" y2="${PG.cornerLine.y2}" stroke="#4E342E" stroke-width="2" opacity="0.5"/>
         <g class="corner-cells">${cellsSVG()}</g>
         <g class="corner-drop">${dropSVG(dropHint)}</g>
+        ${debug ? `<g class="debug">${debugSVG(map, placements)}</g>` : ''}
       </svg>
       <div class="room__furniture-layer"></div>
-      <div class="room__hint" aria-hidden="true">拖家具到發光的格子 · 點家具會說話 · 選取後 ↻ 旋轉</div>
+      <div class="room__hint" aria-hidden="true">拖家具到發光的格子 · 點家具會說話 · 選取後 ↻ 旋轉${debug ? ' · DEBUG 開啟中' : ''}</div>
     </div>
   `;
 
-  const map = furnitureMap || Object.fromEntries(furnitureCatalog.map((f) => [f.id, f]));
   const layer = root.querySelector('.room__furniture-layer');
 
   const sorted = [...placements].sort((a, b) => {
@@ -154,7 +172,7 @@ export function RoomScene({
   return root;
 }
 
-/** 一格一格的框：地板 10×5＋左牆 5×2＋右牆 10×2 */
+/** 一格一格的框：地板 10×5＋左牆 5×3＋右牆 10×3 */
 function cellsSVG() {
   const { O, R, L, TOP, V } = CORNER;
   const P = (x, y) => `${Math.round(x)},${Math.round(y)}`;
@@ -218,3 +236,34 @@ function dropSVG(dropHint) {
 }
 
 export { VIEW };
+
+/**
+ * Debug 疊層（網址加 ?debug=1）：每格中心紅點＋家具錨點藍框＋console.table。
+ * 驗格子與家具相對位置用，平常不顯示。
+ */
+function debugSVG(furnitureMap, placements) {
+  let s = '';
+  for (const plane of ['floor', 'leftWall', 'rightWall']) {
+    const g = GRID[plane];
+    for (let gy = 0; gy < g.rows; gy++) {
+      for (let gx = 0; gx < g.cols; gx++) {
+        const pt = cornerCellToXY(plane, gx, gy, 1, 1);
+        s += `<circle cx="${pt.x}" cy="${pt.y}" r="3" class="dbg-dot"/>`;
+      }
+    }
+  }
+  for (const p of placements) {
+    const f = furnitureMap[p.furnitureId];
+    if (!f) continue;
+    const plane = resolvePlane(p, f);
+    const size = rotatedGridSize(f, p.rotation || 0);
+    const c = cornerCellToXY(plane, p.gx ?? 0, p.gy ?? 0, size.w, size.h);
+    const w = f.footprint.w;
+    const h = f.footprint.h;
+    const top = plane === 'floor' ? c.y - h : c.y - h / 2;
+    s += `<rect x="${Math.round(c.x - w / 2)}" y="${Math.round(top)}" width="${Math.round(w)}" height="${Math.round(h)}" class="dbg-box"/>`;
+    s += `<line x1="${c.x - 8}" y1="${c.y}" x2="${c.x + 8}" y2="${c.y}" class="dbg-cross"/>`;
+    s += `<line x1="${c.x}" y1="${c.y - 8}" x2="${c.x}" y2="${c.y + 8}" class="dbg-cross"/>`;
+  }
+  return s;
+}

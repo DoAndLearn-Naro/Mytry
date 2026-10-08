@@ -12,15 +12,16 @@
  *   v3: + warehouse，角落座標 O.y 200→220 / V 104→120，重算 x/y
  *   v4: 等比格線（地板 8×4→10×5、統一牆 8×2→左 5×2＋右 10×2），
  *       placements 加 plane，舊座標等比映射＋碰撞排解
- *   v5: （未來範例）+ rooms 多房間：見 migrateV5 註解
+ *   v5: 直式畫布（牆加高 TOP -160/V 380、牆 2 列→3 列），重算全部 x/y
+ *   v6: （未來範例）+ rooms 多房間：見 migrateV6 註解
  */
 
-export const APP_VERSION = '0.5.0';
-export const SCHEMA_VERSION = 4;
+export const APP_VERSION = '0.6.0';
+export const SCHEMA_VERSION = 5;
 
 import { getMeta, setMeta, getAllPlacements, updatePlacement, getAllFurniture, putFurniture } from './db.js';
 import { DEFAULT_FURNITURE } from './furniture.js';
-import { rotatedGridSize, cornerCellToXY, isAreaFree, findFreeCell, getGridShape } from './scene.js';
+import { rotatedGridSize, cornerCellToXY, isAreaFree, findFreeCell, getGridShape, resolvePlane } from './scene.js';
 
 const MIGRATIONS = [
   {
@@ -100,9 +101,34 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 5,
+    note: 'v5：直式畫布（牆加高、3 列），重算全部 placements x/y（gy 0-1 在新 3 列仍有效，免搬移）',
+    migrate: async (ctx) => {
+      for (const f of DEFAULT_FURNITURE) {
+        await putFurniture({ ...f, builtin: true });
+      }
+      const catalog = await getAllFurniture();
+      const map = {};
+      for (const f of catalog) map[f.id] = f;
+      if (ctx) ctx.furnitureMap = map;
+      const placements = await getAllPlacements();
+      for (const p of placements) {
+        const f = map[p.furnitureId];
+        if (!f) continue;
+        const plane = p.plane || resolvePlane(p, f);
+        const size = rotatedGridSize(f, p.rotation || 0);
+        const g = getGridShape(plane);
+        const gx = Math.max(0, Math.min(g.cols - size.w, p.gx ?? 0));
+        const gy = Math.max(0, Math.min(g.rows - size.h, p.gy ?? 0));
+        const pt = cornerCellToXY(plane, gx, gy, size.w, size.h);
+        await updatePlacement(p.id, { plane, gx: pt.gx, gy: pt.gy, x: pt.x, y: pt.y });
+      }
+    },
+  },
   // {
-  //   version: 5,
-  //   note: 'v5：placements 加 roomId，預設 room-1；warehouse 同步加 roomId',
+  //   version: 6,
+  //   note: 'v6：placements 加 roomId，預設 room-1；warehouse 同步加 roomId',
   //   migrate: async () => {
   //     const placements = await getAllPlacements();
   //     for (const p of placements) {
