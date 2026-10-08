@@ -1,0 +1,36 @@
+{
+  "name": "每日小花園 Life Garden",
+  "short_name": "小花園",
+  "description": "陪伴長者的每日任務小花園，點亮燈泡、拍照打卡、讓植物一起成長。",
+  "lang": "zh-TW",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF8E7",
+  "theme_color": "#5C8D4A",
+  "categories": ["health", "lifestyle", "education"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "今日任務",
+      "short_name": "任務",
+      "description": "直接開啟今日發光燈泡",
+      "url": "./?entry=today",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
