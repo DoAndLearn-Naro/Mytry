@@ -137,7 +137,8 @@ export function RoomScene({
       const c = cornerCellToXY(plane, p.gx ?? 0, p.gy ?? 0, size.w, size.h);
       const hw = (f.footprint.w / 2) / scale;
       const hh = (f.footprint.h / 2) / scale;
-      const cy = c.y - hh * 0.44; // 對齊 translate(-50%,-72%) 的視覺中心
+      // 視覺中心：地板腳落地（盒底＝格心），牆飾置中
+      const cy = plane === 'floor' ? c.y - hh : c.y;
       if (Math.abs(sx - c.x) > hw || Math.abs(sy - cy) > hh) continue;
       const d = (sx - c.x) ** 2 + (sy - cy) ** 2;
       if (d < bestD) { bestD = d; best = p; }
