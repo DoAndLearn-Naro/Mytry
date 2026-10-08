@@ -87,7 +87,7 @@ async function reloadAll(ctx) {
 /* ============ Render ============ */
 
 function renderShell(ctx) {
-  container.innerHTML = `
+  ctx.container.innerHTML = `
     <header class="app-header">
       <h1 class="app-header__title" id="app-title" role="button" aria-label="每日小花園標題">每日小花園</h1>
       <p class="app-header__sub" id="date-line"></p>
