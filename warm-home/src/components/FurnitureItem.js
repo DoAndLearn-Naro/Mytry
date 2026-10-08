@@ -1,10 +1,11 @@
 import { SCENE, rotatedGridSize, cornerCellToXY, cornerCellFromXY } from '../modules/scene.js';
+import { furnitureArt } from '../modules/furnitureArt.js';
 
 /**
- * 單件家具 — Warm Home v0.4（貼牆貼地 3D 版，對齊桌面 try.html）
- * ──────────────────────────────────────────────────────────
- * 地板：徑向地面陰影 + drop-shadow，坐進格子裡。
- * 牆面：skewY(∓26.57deg) scaleX(.866) 貼合牆面 + 接觸陰影 + 掛釘 + 立體木框。
+ * 單件家具 — Warm Home v0.5（3D 手繪版）
+ * ───────────────────────────────────
+ * 本體 = furnitureArt 等角 SVG，不再是 emoji。
+ * 地板：地面陰影＋3D 本體＋名牌；牆面：掛釘＋接觸陰影＋3D 本體（自帶框）。
  * 牆左右：gx<4 左牆，否則右牆。
  */
 
@@ -28,23 +29,18 @@ export function FurnitureItem({
     + ` ${hasEvent ? 'has-event' : ''}`;
   el.style.left = `${(pt.x / SCENE.width) * 100}%`;
   el.style.top = `${(pt.y / SCENE.height) * 100}%`;
-  // 牆飾依框體縮放，地板依 footprint
-  if (!isWall) {
-    el.style.width = `${furniture.footprint.w}px`;
-    el.style.height = `${furniture.footprint.h}px`;
-  } else {
-    el.style.width = `${Math.max(96, furniture.footprint.w * 0.72)}px`;
-  }
+  el.style.width = `${furniture.footprint.w}px`;
+  el.style.height = `${furniture.footprint.h}px`;
   el.style.zIndex = String(selected ? 999 : (depth ?? 10));
   el.dataset.pid = placement.id;
+
+  const art = furnitureArt(furniture.id);
 
   if (!isWall) {
     el.innerHTML = `
       <div class="floor-shadow" aria-hidden="true"></div>
-      <div class="furniture__body">
-        <div class="furniture__emoji">${furniture.emoji}</div>
-        <div class="furniture__label">${furniture.label}</div>
-      </div>
+      <div class="furniture__art" aria-hidden="true">${art}</div>
+      <div class="furniture__tag">${furniture.label}</div>
       <div class="furniture__warmth" style="--warm:${waterLevel};" aria-hidden="true"></div>
       ${bubble && bubble.text ? `<div class="speech-bubble" role="status">${bubble.icon ? `${bubble.icon} ` : ''}${escapeHtml(bubble.text)}</div>` : ''}
       ${hasEvent ? `<button class="event-badge" type="button" aria-label="有新事件">❗</button>` : ''}
@@ -58,10 +54,7 @@ export function FurnitureItem({
     el.innerHTML = `
       <div class="wall-contact-shadow" aria-hidden="true"></div>
       <div class="wall-nail" aria-hidden="true"></div>
-      <div class="wall-3d-frame">
-        <div class="furniture__emoji">${furniture.emoji}</div>
-        <div class="furniture__label">${furniture.label}</div>
-      </div>
+      <div class="furniture__art" aria-hidden="true">${art}</div>
       <div class="furniture__warmth" style="--warm:${waterLevel};" aria-hidden="true"></div>
       ${bubble && bubble.text ? `<div class="speech-bubble" role="status">${bubble.icon ? `${bubble.icon} ` : ''}${escapeHtml(bubble.text)}</div>` : ''}
       ${hasEvent ? `<button class="event-badge" type="button" aria-label="有新事件">❗</button>` : ''}

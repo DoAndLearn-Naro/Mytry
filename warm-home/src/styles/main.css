@@ -55,7 +55,7 @@ button { font-family: inherit; }
 }
 .room-scene {
   position: relative;
-  width: 100%; max-width: 520px;
+  width: 100%; max-width: 720px;
   aspect-ratio: 3 / 4;
   margin: 0 auto;
   border-radius: var(--radius-lg);
@@ -457,7 +457,7 @@ button { font-family: inherit; }
 @media (min-width: 720px) {
   body { font-size: 22px; }
   .app-header__title { font-size: 36px; }
-  .room-scene { max-width: 580px; }
+  .room-scene { max-width: 780px; }
 }
 
 /* ============================================================
@@ -658,6 +658,23 @@ button { font-family: inherit; }
 
 /* 倉庫暫存款：虛線框區分 */
 .catalog__item--stored { border: 2px dashed var(--color-accent); }
+
+/* ============================================================
+ * v0.5 3D 手繪家具（取代 emoji 本體）
+ * ============================================================ */
+.furniture__art { width: 100%; height: 100%; }
+.furniture__art svg { width: 100%; height: 100%; display: block; }
+/* 地板名牌：半透明小 pill，不擋本體 */
+.furniture__tag {
+  position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%);
+  background: rgba(60, 42, 30, 0.82); color: #FFF8E7;
+  font-size: 13px; font-weight: 800; white-space: nowrap;
+  padding: 2px 12px; border-radius: 999px; z-index: 5; pointer-events: none;
+}
+.furniture.is-selected .furniture__tag { background: var(--color-primary); }
+/* 型錄 3D 小圖 */
+.catalog__art { width: 56px; height: 56px; }
+.catalog__art svg { width: 100%; height: 100%; display: block; }
 .room-scene--corner .speech-bubble {
   position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
   background: #fff; border: 2px solid #8D6E63; padding: 6px 12px; border-radius: 16px;

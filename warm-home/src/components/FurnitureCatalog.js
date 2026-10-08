@@ -1,16 +1,10 @@
 /**
- * 家具抽屜（含倉庫） — Warm Home v0.4
+ * 家具抽屜（含倉庫） — Warm Home v0.5
  * ────────────────────────────────
- * 上：倉庫暫存（收回的家具，點「取出擺放」回到房間）
- * 下：全部型錄（無限領用，點一下放到空格子）
- *
- * props:
- *   - furnitureCatalog, furnitureMap
- *   - warehouse: [{ id, furnitureId, rotation, water, storedAt }]
- *   - onPick(furnitureId)
- *   - onTakeOut(warehouseId)
- *   - onClose()
+ * 3D 手繪小圖＋名牌，不再用 emoji 選家具。
  */
+
+import { furnitureArt } from '../modules/furnitureArt.js';
 
 export function FurnitureCatalog({ furnitureCatalog, furnitureMap, warehouse = [], onPick, onTakeOut, onClose }) {
   const root = document.createElement('div');
@@ -40,7 +34,7 @@ export function FurnitureCatalog({ furnitureCatalog, furnitureMap, warehouse = [
           if (!f) return '';
           return `
             <button class="catalog__item catalog__item--stored" data-wid="${w.id}" type="button">
-              <span class="catalog__emoji" aria-hidden="true">${f.emoji}</span>
+              <span class="catalog__art" aria-hidden="true">${furnitureArt(f.id)}</span>
               <span class="catalog__label">${f.label}</span>
               <span class="catalog__label" style="opacity:0.6;font-weight:400;">取出擺放</span>
             </button>
@@ -90,7 +84,7 @@ function itemHTML(f) {
   const gs = f.gridSize ? `${f.gridSize.w}×${f.gridSize.h}格` : '';
   return `
     <button class="catalog__item" data-id="${f.id}" type="button">
-      <span class="catalog__emoji" aria-hidden="true">${f.emoji}</span>
+      <span class="catalog__art" aria-hidden="true">${furnitureArt(f.id)}</span>
       <span class="catalog__label">${f.label}</span>
       ${gs ? `<span class="catalog__label" style="opacity:0.6;font-weight:400;">${gs}</span>` : ''}
     </button>
