@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Mytry — 兩個長者友善 PWA</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(180deg, #FFF8E7 0%, #FCEFC7 100%);
+        font-family: -apple-system, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+        color: #2E3B2A;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .card {
+        background: #fff;
+        border-radius: 24px;
+        padding: 28px 24px;
+        max-width: 480px;
+        box-shadow: 0 16px 32px rgba(0,0,0,0.12);
+        text-align: center;
+      }
+      h1 { margin: 0 0 6px; font-size: 28px; color: #5C8D4A; }
+      p  { margin: 0 0 18px; font-size: 16px; color: #6E5A4A; }
+      a.btn {
+        display: block;
+        margin: 10px 0;
+        padding: 14px;
+        background: #5C8D4A;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 18px;
+        border-radius: 14px;
+        box-shadow: 0 4px 0 #3F6A2F;
+      }
+      a.btn:active { box-shadow: 0 1px 0 #3F6A2F; transform: translateY(3px); }
+      a.btn.alt { background: #A47148; box-shadow: 0 4px 0 #6E4A2D; }
+      a.btn.alt:active { box-shadow: 0 1px 0 #6E4A2D; }
+      footer { margin-top: 18px; font-size: 13px; color: #999; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>🌿 兩個小家都幫你準備好了</h1>
+      <p>挑一個你想打開的</p>
+      <a class="btn"        href="./life-garden/">💡 每日小花園</a>
+      <a class="btn alt"    href="./warm-home/">🏠 暖窩</a>
+      <footer>長者友善 PWA · 可加入主畫</footer>
+    </main>
+  </body>
+</html>

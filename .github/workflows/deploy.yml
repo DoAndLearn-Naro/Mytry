@@ -43,12 +43,13 @@ jobs:
         run: npm run build
         working-directory: warm-home
 
-      - name: Assemble dist (life-garden + warm-home)
+      - name: Assemble dist (life-garden + warm-home + landing)
         run: |
           mkdir -p dist/life-garden
           mkdir -p dist/warm-home
           cp -r life-garden/dist/. dist/life-garden/
           cp -r warm-home/dist/. dist/warm-home/
+          cp shared/index.html dist/index.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
