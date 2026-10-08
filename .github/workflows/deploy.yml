@@ -25,23 +25,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+          cache-dependency-path: |
+            life-garden/package-lock.json
+            warm-home/package-lock.json
 
       - name: Install life-garden dependencies
-        run: npm ci
-        working-directory: life-garden
+        run: cd life-garden && npm ci
 
       - name: Build life-garden
-        run: npm run build
-        working-directory: life-garden
+        run: cd life-garden && npm run build
 
       - name: Install warm-home dependencies
-        run: npm ci
-        working-directory: warm-home
+        run: cd warm-home && npm ci
 
       - name: Build warm-home
-        run: npm run build
-        working-directory: warm-home
+        run: cd warm-home && npm run build
 
       - name: Assemble dist (life-garden + warm-home + landing)
         run: |
