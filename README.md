@@ -1,114 +1,55 @@
-# 每日小花園 Life Garden（PWA · Phase 2）
+# 每日小花園 Life Garden
 
-> 為長者設計的認知保健 / 每日任務 App。
-> 點亮燈泡 → 完成任務 → 澆水裝飾 → 花園一起長大。
-> **2.5D 溫馨陽台場景**，正面透視與邊框傾斜帶出景深。
+> 為長者設計的 **PWA 認知保健 App**。  
+> 點亮燈泡 → 完成任務 → 澆水裝飾 → 花園一起長大。  
+> 2.5D 溫馨陽台場景，可安裝到手機主畫面，離線可用。
 
-## 1. 技術棧
+---
 
-| 類別       | 選擇                                | 理由                          |
-| ---------- | ----------------------------------- | ---------------------------- |
-| Framework | Vanilla JS + ES Modules              | 最低硬體需求                 |
-| 建置工具   | Vite 5                              | 快速 HMR                     |
-| PWA        | vite-plugin-pwa + sw.js             | Manifest + 手寫離線快取      |
-| 資料       | IndexedDB (v2 schema)               | 4 個 store + meta + content pack |
-| 視覺       | CSS perspective + transform-style: preserve-3d | 2.5D 多層景深 |
-| 相機       | `<input capture>`                   | Android/iOS 高相容           |
-| 反饋       | `<audio>` + `navigator.vibrate`     | 多感官回饋                    |
+## 📱 給長者與家屬
 
-## 2. 專案結構
+### 如何加入主畫面（給長輩）
 
-```
-life-garden/
-├── index.html
-├── vite.config.js
-├── package.json
-├── public/
-│   ├── manifest.webmanifest
-│   ├── sw.js
-│   ├── icons/{icon-192.png, icon-512.png}
-│   └── sounds/{tap.wav, success.wav}
-└── src/
-    ├── main.js                        # 啟動 + 註冊 SW
-    ├── App.js                         # 主控制器（場景路由）
-    ├── components/
-    │   ├── GardenScene.js             # 2.5D 場景（4 層景深 + 視差）
-    │   ├── Slot.js                    # 插槽（位置 / 旋轉 / 水滴）
-    │   ├── Decoration.js              # 4 種裝飾渲染（frame/plant/lamp/rug）
-    │   ├── DecorationDrawer.js        # 底部抽屜選裝飾
-    │   ├── AdminPanel.js              # 隱藏管理員面板
-    │   ├── Lightbulb.js               # 漂浮燈泡
-    │   ├── TaskModal.js               # 任務彈窗
-    │   └── PhotoCapture.js            # 拍照預覽
-    ├── modules/
-    │   ├── db.js                      # IndexedDB（v2: 含 placements / decorations / contentPack）
-    │   ├── layout.js                  # 4 槽預設佈局（溫馨陽台）
-    │   ├── contentPack.js             # 內容包載入 / 合併 / 重置
-    │   ├── tasks.js                   # 任務模板（每個綁定 slot）
-    │   ├── plant.js                   # 各類別階段表
-    │   ├── camera.js                  # 相機拍照 + 自動壓縮
-    │   └── feedback.js                # 音效 + 震動
-    └── styles/main.css                # 長者友善主題 + 2.5D perspective
-```
+| 手機           | 步驟                                                                       |
+| ------------- | -------------------------------------------------------------------------- |
+| **iPhone**   | 用 Safari 打開網址 → 點下方「分享」↑ →「加入主畫面」                       |
+| **Android**   | 用 Chrome 打開網址 → 點右上「⋮」→「加到主畫面」或「安裝應用程式」           |
 
-### 關鍵模組位置
+加入後就像一般 App 會有圖示，點開就直接進入，沒有網址列。
+**資料完全保存在長者自己的手機裡，不會上傳到任何地方**。
 
-| 需求               | 看這支                                       |
-| ------------------ | -------------------------------------------- |
-| 安裝到桌面         | `public/manifest.webmanifest`、`vite.config.js` |
-| 離線可開           | `public/sw.js`、`src/main.js`               |
-| 每日任務怎麼選     | `src/modules/tasks.js` 的 `pickDailyTask()` |
-| 4 個插槽長怎樣     | `src/modules/layout.js` 的 `DEFAULT_LAYOUT` |
-| 2.5D 怎麼做出來    | `src/styles/main.css` 的 `.scene` + `.scene__layer` |
-| 裝飾抽屜           | `src/components/DecorationDrawer.js`        |
-| 上傳內容包         | `src/components/AdminPanel.js`               |
-| 內容包 schema      | `src/modules/contentPack.js` 的 `DEFAULT_PACK` |
-| 升級資料庫怎麼做   | `src/modules/db.js` 的 `onupgradeneeded`     |
+### 怎麼玩
 
-## 3. 場景設計：溫馨陽台
+1. 開啟後會看到一個溫馨的陽台場景  
+2. 右上方有 **會發光的燈泡** → 點下去就是今天的任務  
+3. 任務可能是「拍照」、「散步」、「數東西」、「伸展」等  
+4. 完成任務 → 對應的裝飾（植物、畫框、地毯、燈）會長大變化  
 
-```
-        ┌──────────────────────────────────────┐
-   Z=4  │                  [漂浮燈泡 💡]    │
-        │                                      │
-   Z=1  │              [窗台 🪴]              │
-        │   [牆面 🖼️]            [立燈 🪔]  │
-   Z=0  │                                      │
-        │ ─── 地板 ─── [地毯 🟫] ─── 地板 ─── │
-   Z=3  │                                      │
-        └──────────────────────────────────────┘
-```
+### 長者也可以自己換裝飾
 
-- **Z=0 牆面**：天空漸層背景
-- **Z=20px 牆體**：暖色牆
-- **Z=40px 窗戶**：木質窗框，內部浮動植物盆栽
-- **Z=60px 地板**：木紋重複線
-- **Z=100px 漂浮層**：發光燈泡 + 任務彈窗
+- 點場景中的 **空位（+ 號）** → 從底部抽屜挑選
+- 已完成的任務越多，能挑的裝飾也越多
+- 不喜歡了可以 **收回抽屜** 再放別的
 
-每個插槽自帶 `transform: translateZ(...)` 與 `rotate(var(--rot))` 微旋轉，按下時彈出 Z+24px。
+---
 
-## 4. 插槽 ↔ 任務 對應
+## 🔧 給開發者（你）
 
-| 插槽 ID          | 預設裝飾       | 綁定任務 ID    | 任務內容                |
-| ---------------- | ------------- | -------------- | ----------------------- |
-| `wall.frame-xl`  | 空畫框 🖼️   | `photo-sky`    | 拍天空 → 自動入框        |
-| `window.sill`    | 多肉 🌵       | `photo-plant`  | 拍植物 → 植物成長       |
-| `corner.lamp`    | 復古燈 🪔    | `stretch-arms` | 伸展 → 燈光變亮         |
-| `floor.rug`      | 條紋地毯 🟫   | `walk-around`  | 散步 → 地毯長花         |
+### 線上 Demo
 
-每日從 4 個任務中以日期 hash 抽 1 個，完成後對應插槽獲得水分。
+> **https://DoAndLearn-Naro.github.io/Mytry/** （CI 自動部署）
 
-## 5. 管理員入口（你上傳內容包用）
+### 你如何更新內容
 
-### 觸發
-主畫面標題 `每日小花園` **連點 5 次**（1.5 秒內）。
+依你之前說的「更新一律透過我這邊上傳進行更新」：
 
-### 功能
-- 拖放或點選 `.json` 內容包 → 自動合併進現有裝飾庫
-- 重置為預設內容包（保留自訂任務記錄）
-- 顯示目前內容包版本與裝飾數
+1. **改程式碼 → git push**（CI 會自動 build + deploy，約 1-2 分鐘後生效）
+2. **改裝飾 → 在 App 內本（連點標題 5 次開管理員面板）拖放 JSON**  
+   （內容包格式見 `src/modules/contentPack.js` 的 `DEFAULT_PACK`）
 
-### 內容包 Schema
+長者的手機不用重灌；下次開啟 App 會自動更新（Service Worker 背景更新）。
+
+### 內容包範本
 
 ```json
 {
@@ -121,14 +62,6 @@ life-garden/
       "category": "plant",
       "fitsSlots": ["window.sill"],
       "unlockAfter": 3
-    },
-    {
-      "id": "lamp-paper",
-      "label": "紙燈籠",
-      "emoji": "🏮",
-      "category": "lamp",
-      "fitsSlots": ["corner.lamp"],
-      "unlockAfter": 1
     }
   ],
   "slots": [],
@@ -136,66 +69,77 @@ life-garden/
 }
 ```
 
-### 你日後更新時
-1. 改 `src/.../*.js` 或上傳新內容包 JSON
-2. 重新打包 `npm run build`
-4. 將 `dist/` 部署到原位置（HTTPS）
-5. 長者手機重啟 App 即可看到新內容
+### 專案結構（摘要）
 
-> 📦 內容包更新是「合併」非「覆蓋」，所以長者既有的 `placements` 不會被洗掉。
+```
+src/
+├── App.js                          主控制器
+├── components/                     UI 元件
+│   ├── GardenScene.js              2.5D 場景（perspective + 視差）
+│   ├── Slot.js / Decoration.js     插槽 + 裝飾渲染
+│   ├── DecorationDrawer.js         底部抽屜
+│   ├── AdminPanel.js               隱藏管理員（拖放 JSON）
+│   ├── Lightbulb.js                任務燈泡
+│   ├── TaskModal.js / PhotoCapture.js
+└── modules/
+    ├── db.js                       IndexedDB（photos / placements / decorations / contentPack）
+    ├── layout.js                   4 槽預設佈局
+    ├── contentPack.js              內容包載入 / 合併
+    ├── tasks.js                    4 個內建任務
+    ├── camera.js / feedback.js / plant.js
+```
 
-## 6. 開發指令
+### 本機開發（選用）
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # 產出 dist/
-npm run preview  # 預覽打包後
+npm run dev          # http://localhost:5173
+npm run build        # 產出 dist/
 ```
 
-> ⚠️ PWA / 相機 / Service Worker 需 HTTPS 或 localhost 才能跑。
+> ⚠️ PWA / 相機需要 HTTPS（localhost 視為安全）；GitHub Pages 自動提供 HTTPS ✓
 
-## 7. Phase Roadmap
+---
 
-### ✅ Phase 1（MVP）
-- [x] PWA Manifest + SW
-- [x] 長者友善 UI（≥20px / ≥64px 按鈕）
-- [x] 每日單一任務 + 拍照 + IndexedDB 儲存
-- [x] 單植物成長
+## 部署架構
 
-### ✅ Phase 2（目前）
-- [x] 2.5D 場景（多層景深 / perspective / 視差）
-- [x] 4 插槽固定佈局（牆面/窗台/角落/地板）
-- [x] 裝飾抽屜（底部滑出 / 解鎖門檻）
-- [x] 任務 ↔ 插槽綁定（自動派生）
-- [x] 內容包上傳（隱藏管理員入口）
-- [x] 視差背景（deviceorientation，須授權）
+```
+git push (main)
+   ↓
+GitHub Actions (ubuntu-latest)
+   ├─ npm ci
+   ├─ npm run build  →  產出 dist/
+   └─ actions/deploy-pages
+         ↓
+   gh-pages 分支
+         ↓
+   https://DoAndLearn-Naro.github.io/Mytry/
+```
 
-### 🚫 Phase 3（已取消）
-- ❌ 多長者切換（單機單人）
-- ❌ 照顧者後台（改由內容包更新）
+長者開啟該網址 → 「加入主畫面」→ 完成。
 
-### 🔮 未來可加（你決定）
-- 拍照日誌檢視頁（看自己每天拍的照片）
-- 任務歷史曲線（鼓勵持續性）
-- 季節性裝飾（端午、中秋、聖誕）
-- 語音導讀（讓長者不用讀文字也能聽任務）
-- 「換佈局」功能：客廳、書房、陽台切換
+---
 
-## 8. 設計規範（節錄）
+## 設計規範
 
-| 規範         | 數值/做法                                          |
-| ------------- | ------------------------------------------------- |
-| 字體最小       | 20px（行動裝置 22px）                              |
-| 主要按鈕       | 64 × 64px、陰影立體化                             |
-| 一頁一動作     | 單一主要按鈕，輔助為「等一下」「關閉」             |
-| 對比           | 主要綠 `#5C8D4A` × 暖米 `#FFF8E7`（對比 ≥ 4.5:1） |
-| 反饋           | 視覺 + 音效 + 震動 三者並用                       |
-| 操作等待       | 拍照後彈出確認鈕才上傳，避免一鍵完成               |
-| 視差           | ≤6°，預設關閉，首次點擊場景才啟動（須授權）        |
+| 規範         | 數值                                        |
+| ------------ | ------------------------------------------ |
+| 字體最小     | 20px（行動裝置 22px）                      |
+| 主要按鈕     | 64 × 64px、陰影立體化                       |
+| 對比         | 主要綠 `#5C8D4A` × 暖米 `#FFF8E7` ≥ 4.5:1 |
+| 反饋         | 視覺 + 音效 + 震動 三者並用                 |
+| 視差         | ≤6°，預設關閉，需使用者首次點擊才啟動       |
 
-## 9. 部署
+---
 
-`npm run build` 後將 `dist/` 部署到任何靜態主機即可（GitHub Pages / Netlify / Vercel / Nginx）。
+## Roadmap
 
-⚠️ 必須 HTTPS，否則 PWA 安裝、相機、SW 都會失效。
+- ✅ Phase 1：MVP + 單植物 + 拍照任務
+- ✅ Phase 2：2.5D 場景 + 4 插槽 + 內容包
+- 🚫 Phase 3（取消）：多長者 / 照顧者後台
+
+### 未來可加
+- 拍照日誌回顧頁
+- 季節裝飾（端午、中秋）
+- 「換佈局」功能（客廳 / 書房）
+- 語音導讀（讓長者不必讀文字）

@@ -219,7 +219,7 @@ button { font-family: inherit; }
   width: 70%; height: 38%;
   background: linear-gradient(180deg, #F4D27A 0%, #D89A3F 100%);
   clip-path: polygon(15% 0, 85% 0, 100% 100%, 0% 100%);
-  filter: drop-shadow(0 0 calc(8px + var(--glow) * 12px) rgba(255, 220, 120, ${0.4 + var(--glow) * 0.6}));
+  filter: drop-shadow(0 0 calc(8px + var(--glow) * 12px) rgba(255, 220, 120, calc(0.4 + var(--glow) * 0.6)));
 }
 .deco__lamp-pole { width: 8%; flex: 1; background: #4A3527; min-height: 12px; }
 .deco__lamp-base { width: 60%; height: 8%; background: #2F1E15; border-radius: 4px 4px 12px 12px; }

@@ -1,6 +1,11 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+/**
+ * Life Garden — Vite + PWA 設定
+ *  base: './'  使最終產出可用於 GitHub Pages 任意子路徑
+ *         （例：https://user.github.io/Mytry/）
+ */
 export default defineConfig({
   base: './',
   server: {
@@ -11,7 +16,12 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'sounds/tap.wav'],
+      includeAssets: [
+        'icons/icon-192.png',
+        'icons/icon-512.png',
+        'sounds/tap.wav',
+        'sounds/success.wav',
+      ],
       manifest: {
         name: '每日小花園 Life Garden',
         short_name: '小花園',
@@ -40,20 +50,21 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2,wav}'],
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/photos/'),
+            urlPattern: /\/sounds\/.*\.(wav|mp3)$/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'photo-cache',
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheName: 'sound-cache',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },
           {
-            urlPattern: ({ request }) => ['style', 'script', 'worker', 'font'].includes(request.destination),
+            urlPattern: /\.(?:png|jpg|jpeg|svg|webp)$/,
             handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'asset-cache' },
+            options: { cacheName: 'image-cache' },
           },
         ],
       },
