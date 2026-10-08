@@ -1,25 +1,31 @@
 /**
- * IndexedDB — Warm Home (v1)
+ * IndexedDB — Warm Home (v3)
  * ─────────────────────────
  * Stores:
- *   furniture      預設家具型錄
- *   placements     已擺放的家具實例（位置 / 旋轉 / 水滴）
+ *   furniture      預設家具型錄（含 gridSize / chatter）
+ *   placements     已擺放的家具實例（gx,gy 格子 / x,y 角落像素 / rotation / water）
+ *   warehouse      家具倉庫（收回暫存，等取出再擺）
  *   tasks          每日任務紀錄
  *   photos         任務照片 Blob
- *   polaroids      拍立得卡片（貼在家具旁的回憶）
+ *   polaroids      拍立得卡片
+ *   interactions   隨機互動紀錄
+ *   moods          心情日記
  *   contentPack    上傳的內容包
- *   meta           安裝時間 / 是否已 onboarding
+ *   meta           安裝時間 / schemaVersion / 是否已 onboarding
  */
 
 const DB_NAME = 'warm-home-db';
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 
 const STORES = {
   FURNITURE: 'furniture',
   PLACEMENTS: 'placements',
+  WAREHOUSE: 'warehouse',
   TASKS: 'tasks',
   PHOTOS: 'photos',
   POLAROIDS: 'polaroids',
+  INTERACTIONS: 'interactions',
+  MOODS: 'moods',
   CONTENT_PACK: 'contentPack',
   META: 'meta',
 };
@@ -32,26 +38,48 @@ export function getDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (event) => {
       const db = req.result;
-      const f = db.createObjectStore(STORES.FURNITURE, { keyPath: 'id' });
-      f.createIndex('byCategory', 'category');
-
-      const p = db.createObjectStore(STORES.PLACEMENTS, { keyPath: 'id', autoIncrement: true });
-      p.createIndex('byFurnitureId', 'furnitureId');
-
-      const t = db.createObjectStore(STORES.TASKS, { keyPath: 'id', autoIncrement: true });
-      t.createIndex('byDate', 'date');
-      t.createIndex('byPlacementId', 'placementId');
-
-      const ph = db.createObjectStore(STORES.PHOTOS, { keyPath: 'id', autoIncrement: true });
-      ph.createIndex('byTaskId', 'taskId');
-      ph.createIndex('byPlacementId', 'placementId');
-
-      const po = db.createObjectStore(STORES.POLAROIDS, { keyPath: 'id', autoIncrement: true });
-      po.createIndex('byPlacementId', 'placementId');
-      po.createIndex('byCreatedAt', 'createdAt');
-
-      db.createObjectStore(STORES.CONTENT_PACK, { keyPath: 'key' });
-      db.createObjectStore(STORES.META, { keyPath: 'key' });
+      const ensure = (name, opts, build) => {
+        let store;
+        if (db.objectStoreNames.contains(name)) {
+          store = event.target.transaction.objectStore(name);
+        } else {
+          store = db.createObjectStore(name, opts);
+        }
+        if (build) build(store);
+        return store;
+      };
+      ensure(STORES.FURNITURE, { keyPath: 'id' }, (s) => {
+        try { s.createIndex('byCategory', 'category'); } catch (_) {}
+      });
+      ensure(STORES.PLACEMENTS, { keyPath: 'id', autoIncrement: true }, (s) => {
+        try { s.createIndex('byFurnitureId', 'furnitureId'); } catch (_) {}
+      });
+      ensure(STORES.WAREHOUSE, { keyPath: 'id', autoIncrement: true }, (s) => {
+        try { s.createIndex('byFurnitureId', 'furnitureId'); } catch (_) {}
+        try { s.createIndex('byStoredAt', 'storedAt'); } catch (_) {}
+      });
+      ensure(STORES.TASKS, { keyPath: 'id', autoIncrement: true }, (s) => {
+        try { s.createIndex('byDate', 'date'); } catch (_) {}
+        try { s.createIndex('byPlacementId', 'placementId'); } catch (_) {}
+      });
+      ensure(STORES.PHOTOS, { keyPath: 'id', autoIncrement: true }, (s) => {
+        try { s.createIndex('byTaskId', 'taskId'); } catch (_) {}
+        try { s.createIndex('byPlacementId', 'placementId'); } catch (_) {}
+      });
+      ensure(STORES.POLAROIDS, { keyPath: 'id', autoIncrement: true }, (s) => {
+        try { s.createIndex('byPlacementId', 'placementId'); } catch (_) {}
+        try { s.createIndex('byCreatedAt', 'createdAt'); } catch (_) {}
+      });
+      ensure(STORES.INTERACTIONS, { keyPath: 'id', autoIncrement: true }, (s) => {
+        try { s.createIndex('byCreatedAt', 'createdAt'); } catch (_) {}
+        try { s.createIndex('byPlacementId', 'placementId'); } catch (_) {}
+      });
+      ensure(STORES.MOODS, { keyPath: 'id', autoIncrement: true }, (s) => {
+        try { s.createIndex('byDate', 'date'); } catch (_) {}
+        try { s.createIndex('byCreatedAt', 'createdAt'); } catch (_) {}
+      });
+      ensure(STORES.CONTENT_PACK, { keyPath: 'key' }, null);
+      ensure(STORES.META, { keyPath: 'key' }, null);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -271,6 +299,109 @@ export async function getMeta(key) {
       const req = store.get(key);
       req.onsuccess = () => res(req.result ? req.result.value : null);
       req.onerror = () => rej(req.error);
+    });
+  });
+}
+
+/* ============ Warehouse（家具倉庫：收回暫存） ============ */
+export async function stashToWarehouse(record) {
+  return tx(STORES.WAREHOUSE, 'readwrite', (store) => {
+    return new Promise((res, rej) => {
+      const req = store.add({ storedAt: Date.now(), water: 0, rotation: 0, ...record });
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+  });
+}
+export async function getWarehouse() {
+  return tx(STORES.WAREHOUSE, 'readonly', (store) => {
+    return new Promise((res, rej) => {
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const sorted = (req.result || []).sort((a, b) => b.storedAt - a.storedAt);
+        res(sorted);
+      };
+      req.onerror = () => rej(req.error);
+    });
+  });
+}
+export async function takeFromWarehouse(id) {
+  return tx(STORES.WAREHOUSE, 'readwrite', (store) => {
+    return new Promise((res, rej) => {
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const cur = getReq.result;
+        if (!cur) {
+          res(null);
+          return;
+        }
+        const delReq = store.delete(id);
+        delReq.onsuccess = () => res(cur);
+        delReq.onerror = () => rej(delReq.error);
+      };
+      getReq.onerror = () => rej(getReq.error);
+    });
+  });
+}
+
+/* ============ Interactions（隨機互動紀錄） ============ */
+export async function logInteraction(record) {
+  return tx(STORES.INTERACTIONS, 'readwrite', (store) => {
+    return new Promise((res, rej) => {
+      const req = store.add({ createdAt: Date.now(), ...record });
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+  });
+}
+export async function getRecentInteractions(limit = 50) {
+  return tx(STORES.INTERACTIONS, 'readonly', (store) => {
+    return new Promise((res, rej) => {
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const sorted = (req.result || []).sort((a, b) => b.createdAt - a.createdAt);
+        res(sorted.slice(0, limit));
+      };
+      req.onerror = () => rej(req.error);
+    });
+  });
+}
+
+/* ============ Moods（心情日記） ============ */
+export async function saveMood(record) {
+  return tx(STORES.MOODS, 'readwrite', (store) => {
+    return new Promise((res, rej) => {
+      const req = store.add({ createdAt: Date.now(), ...record });
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+  });
+}
+export async function getAllMoods(limit = 100) {
+  return tx(STORES.MOODS, 'readonly', (store) => {
+    return new Promise((res, rej) => {
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const sorted = (req.result || []).sort((a, b) => b.createdAt - a.createdAt);
+        res(sorted.slice(0, limit));
+      };
+      req.onerror = () => rej(req.error);
+    });
+  });
+}
+export async function getMoodsByDate(dateKey) {
+  return tx(STORES.MOODS, 'readonly', (store) => {
+    return new Promise((res, rej) => {
+      try {
+        const idx = store.index('byDate');
+        const req = idx.getAll(dateKey);
+        req.onsuccess = () => res(req.result || []);
+        req.onerror = () => rej(req.error);
+      } catch (_) {
+        const req = store.getAll();
+        req.onsuccess = () => res((req.result || []).filter((m) => m.date === dateKey));
+        req.onerror = () => rej(req.error);
+      }
     });
   });
 }

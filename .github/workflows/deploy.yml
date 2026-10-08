@@ -48,6 +48,17 @@ jobs:
           cp -r life-garden/dist/. dist/life-garden/
           cp -r warm-home/dist/. dist/warm-home/
           cp shared/index.html dist/index.html
+          # Pages 根目錄關掉 Jekyll，避免底線開頭檔被忽略
+          touch dist/.nojekyll
+
+      - name: Verify PWA artifacts (manifest + SW + icons)
+        run: |
+          test -f dist/warm-home/manifest.webmanifest || (echo "❌ warm-home manifest 缺失" && exit 1)
+          test -f dist/warm-home/sw.js || (echo "❌ warm-home sw.js 缺失" && exit 1)
+          test -f dist/warm-home/icons/icon-192.png || (echo "❌ warm-home icon 缺失" && exit 1)
+          test -f dist/life-garden/manifest.webmanifest || (echo "❌ life-garden manifest 缺失" && exit 1)
+          test -f dist/life-garden/sw.js || (echo "❌ life-garden sw.js 缺失" && exit 1)
+          echo "✅ PWA 產物齊全，可離線安裝使用"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

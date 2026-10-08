@@ -1,7 +1,9 @@
 /**
- * 內容包管理 — Warm Home
- * ────────────────────
- * 內容包 = JSON，內含新家具（id, label, emoji, tasks[]）。
+ * 內容包管理 — Warm Home v0.2
+ * ─────────────────────────
+ * 內容包 = JSON，格式：
+ * { version, furniture: [{ id, label, emoji, category, placement,
+ *   footprint, gridSize, tasks[], chatter[] }] }
  * 透過 AdminPanel 拖放上傳，自動寫入 furniture store。
  */
 
@@ -9,16 +11,21 @@ import {
   putFurniture,
   getAllFurniture,
   deleteFurniture,
-  getContentPack,
   saveContentPack,
 } from './db.js';
-import { DEFAULT_FURNITURE } from './furniture.js';
+import { DEFAULT_FURNITURE, normalizeFurniture } from './furniture.js';
 
 export async function ensureDefaultFurniture() {
   const all = await getAllFurniture();
-  if (all.length) return all;
+  const byId = new Map(all.map((f) => [f.id, f]));
+  // 已有資料也要補上新版內建款 + 回填 gridSize/chatter（舊 DB 遷移）
   for (const f of DEFAULT_FURNITURE) {
-    await putFurniture({ ...f, builtin: true });
+    const cur = byId.get(f.id);
+    if (!cur) {
+      await putFurniture({ ...f, builtin: true });
+    } else if (!cur.gridSize || !cur.chatter) {
+      await putFurniture({ ...cur, gridSize: cur.gridSize || f.gridSize, chatter: cur.chatter || f.chatter, footprint: cur.footprint || f.footprint });
+    }
   }
   return getAllFurniture();
 }
@@ -27,8 +34,9 @@ export async function applyPack(pack) {
   if (!pack || !Array.isArray(pack.furniture)) {
     throw new Error('內容包缺少 furniture 陣列');
   }
-  for (const f of pack.furniture) {
-    if (!f.id) continue;
+  for (const raw of pack.furniture) {
+    const f = normalizeFurniture(raw);
+    if (!f) continue;
     await putFurniture({ ...f, builtin: false });
   }
   await saveContentPack({

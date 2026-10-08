@@ -24,11 +24,12 @@ export function OnboardingHint({ onDismiss }) {
     <h2 class="onboard__title">歡迎來到暖窩</h2>
     <p class="onboard__sub">這裡是你自己的房間，擺什麼、放哪裡都由你決定。</p>
     <ol class="onboard__steps">
-      <li>點右下角「<strong>+ 加家具</strong>」打開抽屜</li>
-      <li>點一件家具 → 它會自己進到房間</li>
-      <li>長按拖移、改變位置</li>
+      <li>點下方「<strong>+ 加家具</strong>」打開倉庫抽屜</li>
+      <li>點一件家具 → 它會自己進到房間格子</li>
+      <li>拖移換格子、↻ 旋轉、🗑️ 收回倉庫</li>
       <li>每天會從你擺的家具裡挑出 <strong>3 個小任務</strong></li>
-      <li>每完成一個 → 一張拍立得貼到回憶牆</li>
+      <li>每完成一個 → 一張拍立得貼到 📖 日記</li>
+      <li>用瀏覽器「<strong>加入主畫面</strong>」，以後沒網路也能開，資料都存在手機裡</li>
     </ol>
     <button class="btn btn--primary" data-act="ok">開始佈置</button>
   `;

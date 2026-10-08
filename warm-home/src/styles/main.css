@@ -459,3 +459,228 @@ button { font-family: inherit; }
   .app-header__title { font-size: 36px; }
   .room-scene { max-width: 580px; }
 }
+
+/* ============================================================
+ * v0.2 新增：格線 + 2.5D + 泡泡 + 日記
+ * ============================================================ */
+
+/* 格線（淡淡的，提示可放、不干擾） */
+.room__floorgrid {
+  position: absolute; left: 6%; right: 6%; bottom: 4%; height: 38%;
+  z-index: 1; pointer-events: none;
+}
+.room__wallgrid {
+  position: absolute; left: 10%; right: 10%; top: 30%; height: 26%;
+  z-index: 1; pointer-events: none;
+}
+.grid { display: grid; width: 100%; height: 100%; gap: 2px; }
+.grid--floor { grid-template-columns: repeat(var(--cols), 1fr); grid-template-rows: repeat(var(--rows), 1fr); }
+.grid--wall { grid-template-columns: repeat(var(--cols), 1fr); grid-template-rows: repeat(var(--rows), 1fr); }
+.gridcell {
+  border: 1.5px dashed rgba(110, 74, 45, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.room__hint {
+  position: absolute; left: 0; right: 0; bottom: 6px;
+  text-align: center; font-size: 12px; color: rgba(60,42,30,0.65);
+  z-index: 5; pointer-events: none;
+}
+
+/* 2.5D 厚度：底部側邊 + 更立體陰影 */
+.furniture__side {
+  position: absolute; left: 6px; right: 6px; bottom: -7px; height: 12px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.22), rgba(0,0,0,0.08));
+  border-radius: 0 0 12px 12px;
+  z-index: -1;
+}
+.furniture--floor .furniture__body { border-bottom: 5px solid rgba(140, 107, 69, 0.55); }
+.furniture--wall .furniture__body { border: 3px solid rgba(140, 107, 69, 0.4); }
+.furniture.has-event .furniture__body { animation: eventShake 0.9s ease infinite; }
+@keyframes eventShake {
+  0%, 100% { transform: rotate(-1.2deg); }
+  50% { transform: rotate(1.2deg); }
+}
+
+/* 頭頂泡泡 */
+.furniture__bubble {
+  position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%);
+  max-width: 190px; min-width: 90px;
+  background: #FFFDF7; color: var(--color-text);
+  border-radius: 14px; padding: 8px 12px;
+  font-size: 15px; font-weight: 700; line-height: 1.35;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.22);
+  z-index: 60; text-align: center;
+  animation: bubblePop 0.25s ease;
+  pointer-events: none;
+}
+.furniture__bubble::after {
+  content: ''; position: absolute; top: 100%; left: 50%;
+  transform: translateX(-50%);
+  border: 8px solid transparent; border-top-color: #FFFDF7;
+}
+@keyframes bubblePop {
+  from { transform: translateX(-50%) scale(0.8); opacity: 0; }
+  to { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+.furniture__eventdot {
+  position: absolute; top: -12px; right: -8px;
+  font-size: 24px; z-index: 61;
+  animation: eventShake 0.7s ease infinite;
+}
+.furniture__rot { font-size: 11px; opacity: 0.7; }
+.furniture__rotate {
+  position: absolute; bottom: -14px; right: -14px;
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 3px solid var(--color-accent);
+  background: #FFFDF7; font-size: 22px; font-weight: 800;
+  color: var(--color-primary-d); z-index: 62;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+}
+
+/* 心情三顆大按鈕 */
+.mood__row { display: flex; gap: 10px; margin-top: 6px; }
+.mood__btn {
+  flex: 1; padding: 14px 6px;
+  background: #FBF5E6; border: 3px solid transparent; border-radius: var(--radius-md);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.mood__btn:active { transform: scale(0.95); border-color: var(--color-accent); }
+.mood__emoji { font-size: 44px; }
+.mood__label { font-size: 17px; font-weight: 800; color: var(--color-primary-d); }
+
+/* 日記 */
+.diary__panel { max-height: 88vh; overflow: hidden; }
+.diary__tabs { display: flex; gap: 6px; margin: 10px 0; }
+.diary__tab {
+  flex: 1; padding: 10px 4px; font-size: 16px; font-weight: 800;
+  background: #F4ECDC; border: none; border-radius: 12px; color: var(--color-primary-d);
+}
+.diary__tab.is-active { background: var(--color-primary); color: #fff; }
+.diary__body { overflow-y: auto; min-height: 220px; max-height: 52vh; padding: 4px 2px 10px; }
+.diary__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.diary__photo {
+  position: relative; aspect-ratio: 1; overflow: hidden;
+  border-radius: 12px; border: none; padding: 0; background: #EEE;
+}
+.diary__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.diary__photo-cap {
+  position: absolute; left: 4px; bottom: 4px;
+  background: rgba(0,0,0,0.55); color: #fff;
+  font-size: 16px; border-radius: 999px; padding: 0 8px;
+}
+.diary__viewer img { width: 100%; border-radius: 12px; }
+.diary__list { display: flex; flex-direction: column; gap: 8px; }
+.diary__row {
+  display: flex; gap: 10px; align-items: center;
+  background: #FBF5E6; border-radius: 12px; padding: 10px 12px; font-size: 16px;
+}
+.diary__row-date { color: var(--color-text-dim); font-size: 13px; min-width: 86px; }
+.diary__badges { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.diary__badge {
+  background: #FBF5E6; border-radius: 12px; padding: 12px 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  font-size: 14px; font-weight: 700; color: var(--color-primary-d); text-align: center;
+}
+.diary__badge-e { font-size: 34px; }
+.diary__foot { padding-top: 10px; }
+
+/* 工具列五顆：字小一點才擠得下 */
+.toolbar__btn { font-size: 15px; min-height: 60px; }
+
+/* ============================================================
+ * v0.3 角落房（try.html 視角）
+ * ============================================================ */
+.room-scene--corner { aspect-ratio: 4 / 3; background: #FAF6F0; }
+.room-scene--corner .room-scene__viewport { position: relative; width: 100%; height: 100%; }
+.corner-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.corner-svg .cell { fill: rgba(255,255,255,0.08); stroke: rgba(141,110,99,0.35); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.corner-svg .cell--wall, .corner-svg .cell--left, .corner-svg .cell--right { fill: rgba(255,255,255,0.12); }
+.corner-svg .cell.is-hot-ok { fill: rgba(102, 187, 106, 0.45); stroke: #2E7D32; stroke-dasharray: none; }
+.corner-svg .cell.is-hot-bad { fill: rgba(239, 83, 80, 0.4); stroke: #C62828; stroke-dasharray: none; }
+.corner-drop .drop-ok ellipse { fill: rgba(102,187,106,0.35); stroke: #2E7D32; stroke-width: 3; }
+.corner-drop .drop-bad ellipse { fill: rgba(239,83,80,0.3); stroke: #C62828; stroke-width: 3; }
+.corner-drop text { text-anchor: middle; font-size: 20px; font-weight: 800; fill: #3E2723; }
+.room-scene--corner .room__furniture-layer { position: absolute; inset: 0; pointer-events: none; }
+.room-scene--corner .furniture { transform: translate(-50%, -72%); }
+.room-scene--corner .furniture.is-dragging { transform: translate(-50%, -72%) scale(1.08); opacity: 0.92; filter: drop-shadow(0 18px 25px rgba(0,0,0,0.35)); }
+.room-scene--corner .furniture.is-selected { outline: 3px dashed var(--color-accent); outline-offset: 4px; border-radius: 18px; }
+
+/* 地板：徑向地面陰影（貼地感） */
+.room-scene--corner .floor-shadow {
+  position: absolute; top: 68%; left: 50%;
+  transform: translate(-50%, -50%) scaleY(0.5);
+  width: 72%; height: 30px;
+  background: radial-gradient(ellipse at center, rgba(62,39,35,0.38) 0%, rgba(62,39,35,0) 70%);
+  border-radius: 50%; pointer-events: none; z-index: -1;
+}
+.room-scene--corner .furniture__body { filter: drop-shadow(0 6px 6px rgba(0,0,0,0.22)); }
+
+/* 牆面：skew 貼合左右牆（解決懸空感） */
+.room-scene--corner .wall-item-left { transform: translate(-50%, -50%) skewY(-26.57deg) scaleX(0.866); }
+.room-scene--corner .wall-item-right { transform: translate(-50%, -50%) skewY(26.57deg) scaleX(0.866); }
+.room-scene--corner .wall-item-left.is-dragging { transform: translate(-50%, -50%) skewY(-26.57deg) scaleX(0.866) scale(1.06); }
+.room-scene--corner .wall-item-right.is-dragging { transform: translate(-50%, -50%) skewY(26.57deg) scaleX(0.866) scale(1.06); }
+.room-scene--corner .wall-contact-shadow {
+  position: absolute; top: 6px; width: 100%; height: 100%;
+  background: rgba(44,27,22,0.25); border-radius: 6px; filter: blur(4px); z-index: -1;
+}
+.room-scene--corner .wall-item-left .wall-contact-shadow { left: -8px; }
+.room-scene--corner .wall-item-right .wall-contact-shadow { left: 8px; }
+.room-scene--corner .wall-nail {
+  position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+  width: 8px; height: 8px; background: #3E2723; border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3); z-index: 2;
+}
+.room-scene--corner .wall-nail::after {
+  content: ''; position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+  width: 2px; height: 12px; background: rgba(93,64,55,0.6);
+}
+/* 3D 立體木質框 */
+.room-scene--corner .wall-3d-frame {
+  position: relative; background: #FFF9C4;
+  border: 4px solid #5D4037; border-top-color: #8D6E63;
+  border-left-color: #6D4C41; border-bottom-color: #3E2723;
+  border-radius: 6px; padding: 8px 14px;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), 0 4px 10px rgba(0,0,0,0.15);
+  text-align: center;
+}
+.room-scene--corner .wall-3d-frame .furniture__emoji { font-size: 30px; }
+.room-scene--corner .wall-3d-frame .furniture__label { font-size: 13px; font-weight: 800; color: #3E2723; }
+/* 牆上泡泡/工具列反 skew，保持正的才好讀好按 */
+.room-scene--corner .wall-item-left .speech-bubble { transform: translateX(-50%) skewY(26.57deg) scaleX(1.155); }
+.room-scene--corner .wall-item-right .speech-bubble { transform: translateX(-50%) skewY(-26.57deg) scaleX(1.155); }
+.room-scene--corner .wall-item-left .mini-toolbar { transform: translateX(-50%) skewY(26.57deg) scaleX(1.155); }
+.room-scene--corner .wall-item-right .mini-toolbar { transform: translateX(-50%) skewY(-26.57deg) scaleX(1.155); }
+.room-scene--corner .wall-item-left .event-badge { transform: skewY(26.57deg) scaleX(1.155); }
+.room-scene--corner .wall-item-right .event-badge { transform: skewY(-26.57deg) scaleX(1.155); }
+
+/* 倉庫暫存款：虛線框區分 */
+.catalog__item--stored { border: 2px dashed var(--color-accent); }
+.room-scene--corner .speech-bubble {
+  position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  background: #fff; border: 2px solid #8D6E63; padding: 6px 12px; border-radius: 16px;
+  font-weight: 800; white-space: nowrap; font-size: 16px; color: var(--color-text);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15); z-index: 70; pointer-events: none;
+  max-width: 220px; white-space: normal; text-align: center;
+}
+.room-scene--corner .event-badge {
+  position: absolute; top: -18px; right: -14px; width: 44px; height: 44px;
+  background: #FF3D00; color: #fff; border-radius: 50%; font-size: 24px;
+  border: 3px solid #fff; cursor: pointer; z-index: 71;
+  animation: eventShake 0.8s ease infinite;
+}
+.room-scene--corner .mini-toolbar {
+  position: absolute; top: -72px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 8px; background: #fff; padding: 6px 10px;
+  border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 72;
+  pointer-events: auto;
+}
+.room-scene--corner .tool-btn {
+  width: 60px; height: 60px; border-radius: 50%; border: none;
+  background: #FFF8E1; font-size: 26px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.room-scene--corner .tool-btn--danger { background: #FFEBEE; }
+.room-scene--corner .room__hint { bottom: 8px; }

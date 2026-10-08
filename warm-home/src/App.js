@@ -4,36 +4,54 @@ import { TaskPicker } from './components/TaskPicker.js';
 import { TaskModal } from './components/TaskModal.js';
 import { PhotoCapture } from './components/PhotoCapture.js';
 import { MemoryWall } from './components/MemoryWall.js';
+import { DiaryWall } from './components/DiaryWall.js';
+import { MoodModal } from './components/MoodModal.js';
 import { OnboardingHint } from './components/OnboardingHint.js';
 import { AdminPanel } from './components/AdminPanel.js';
 import { pickDailyTasks, todayKey } from './modules/tasks.js';
 import { ensureDefaultFurniture } from './modules/contentPack.js';
+import { runMigrations } from './modules/migrations.js';
 import {
   getAllFurniture,
   getAllPlacements,
   addPlacement,
   updatePlacement,
   deletePlacement,
+  stashToWarehouse,
+  getWarehouse,
+  takeFromWarehouse,
   saveTask,
   putPhoto,
   addPolaroid,
   getAllPolaroids,
+  getRecentTasks,
+  logInteraction,
+  getRecentInteractions,
+  saveMood,
+  getAllMoods,
   setMeta,
   getMeta,
 } from './modules/db.js';
 import { createFileInput, triggerCapture } from './modules/camera.js';
 import { playTap, celebrate, unlockAudio, buzz } from './modules/feedback.js';
-import { randomPosition } from './modules/scene.js';
+import {
+  rotatedGridSize,
+  isAreaFree,
+  migrateToGrid,
+  randomGridPosition,
+  findFreeCell,
+  cornerCellToXY,
+} from './modules/scene.js';
+import { rollClickInteraction, rollIdleEvent, isCoolingDown } from './modules/interactions.js';
 
 /**
- * App Controller — Warm Home
- * ────────────────────────
- * 主控制器：
- *   1) 載入家具型錄 + 已擺放的家具
- *   2) 每日 3 個任務（從已擺放的家具抽）
- *   3) 任務完成 → 家具 water++ → 拍立得 → 回憶牆
- *   4) 家具抽屜 / 拖曳移動 / 旋轉 / 收回
+ * App Controller — Warm Home v0.2
+ * ─────────────────────────────
+ * 1) 格線擺放（地板 8×4 / 牆面 8×2，吸附+防重疊+旋轉）
+ * 2) 每日 3 任務 + 心情紀錄 → 拍立得 → IG 式日記
+ * 3) 隨機互動：點擊語錄 + 閒置事件泡泡
  */
+
 export async function mountApp(container) {
   const ctx = {
     container,
@@ -45,10 +63,15 @@ export async function mountApp(container) {
     completedTemplateIds: new Set(),
     selectedPlacementId: null,
     draggingPlacementId: null,
+    bubbles: {},
+    activeEvent: null,
+    lastEventAt: 0,
+    lastIdleAt: Date.now(),
     fileInput: null,
     photoBlob: null,
     photoUrl: null,
     activeTask: null,
+    pendingMoodTask: null,
     showOnboarding: false,
     layers: {},
   };
@@ -56,6 +79,16 @@ export async function mountApp(container) {
   await ensureInstallDate();
   await ensureDefaultFurniture();
   await reloadAll(ctx);
+  // 版本遷移（v3 起：角落座標重算；未來 v4+ 照 migrations.js 加）
+  try {
+    const r = await runMigrations(ctx);
+    if (r.migrated.length) {
+      await reloadAll(ctx);
+    }
+  } catch (e) {
+    console.warn('[Warm Home] 遷移略過', e);
+  }
+  await migrateLegacyPlacements(ctx);
 
   ctx.fileInput = createFileInput({
     onPick: (blob) => {
@@ -72,6 +105,7 @@ export async function mountApp(container) {
   renderScene(ctx);
   renderTaskBar(ctx);
   attachSecretAdminTrigger(ctx);
+  startIdleEvents(ctx);
 
   if (ctx.showOnboarding) {
     const onboard = OnboardingHint({ onDismiss: () => dismissOnboard(ctx) });
@@ -88,12 +122,40 @@ async function reloadAll(ctx) {
 
   ctx.placements = await getAllPlacements();
   ctx.polaroids = await getAllPolaroids();
+  try {
+    ctx.warehouse = await getWarehouse();
+  } catch (_) {
+    ctx.warehouse = [];
+  }
 
   ctx.todayTasks = pickDailyTasks(ctx.placements, ctx.furnitureCatalog);
 
   const { getTasksByDate } = await import('./modules/db.js');
   const todayDone = await getTasksByDate(todayKey());
   ctx.completedTemplateIds = new Set(todayDone.filter((t) => t.completed).map((t) => t.templateId));
+}
+
+/** 舊 x/y 遷移到格子（只做一次） */
+async function migrateLegacyPlacements(ctx) {
+  let changed = false;
+  for (const p of ctx.placements) {
+    if (p.gx == null || p.gy == null) {
+      const next = migrateToGrid(p, ctx.furnitureMap);
+      const f = ctx.furnitureMap[p.furnitureId];
+      if (f) {
+        const size = rotatedGridSize(f, next.rotation || 0);
+        if (!isAreaFree(ctx.placements, ctx.furnitureMap, p.id, f.placement, next.gx, next.gy, size.w, size.h)) {
+          const free = randomGridPosition(ctx.placements, ctx.furnitureMap, f);
+          next.gx = free.gx;
+          next.gy = free.gy;
+        }
+        const pt = cornerCellToXY(f.placement, next.gx, next.gy, size.w, size.h);
+        await updatePlacement(p.id, { gx: next.gx, gy: next.gy, x: pt.x, y: pt.y, rotation: next.rotation || 0 });
+        changed = true;
+      }
+    }
+  }
+  if (changed) ctx.placements = await getAllPlacements();
 }
 
 async function isFirstRun() {
@@ -120,7 +182,8 @@ function renderShell(ctx) {
     <nav class="toolbar" id="toolbar">
       <button class="toolbar__btn toolbar__btn--primary" data-act="pick">📋 今日任務</button>
       <button class="toolbar__btn" data-act="add">＋ 加家具</button>
-      <button class="toolbar__btn" data-act="wall">📸 回憶牆</button>
+      <button class="toolbar__btn" data-act="diary">📖 日記</button>
+      <button class="toolbar__btn" data-act="wall">📸 回憶</button>
       <button class="toolbar__btn" data-act="delete" title="收回選取的家具">🗑️</button>
     </nav>
   `;
@@ -132,6 +195,7 @@ function renderShell(ctx) {
 
   ctx.layers.toolbar.querySelector('[data-act="pick"]').addEventListener('click', () => openTaskPicker(ctx));
   ctx.layers.toolbar.querySelector('[data-act="add"]').addEventListener('click', () => openCatalog(ctx));
+  ctx.layers.toolbar.querySelector('[data-act="diary"]').addEventListener('click', () => openDiary(ctx));
   ctx.layers.toolbar.querySelector('[data-act="wall"]').addEventListener('click', () => openMemoryWall(ctx));
   ctx.layers.toolbar.querySelector('[data-act="delete"]').addEventListener('click', () => deleteSelected(ctx));
 }
@@ -141,16 +205,19 @@ function renderScene(ctx) {
   ctx.layers.sceneHost.appendChild(
     RoomScene({
       furnitureCatalog: ctx.furnitureCatalog,
+      furnitureMap: ctx.furnitureMap,
       placements: ctx.placements,
       selectedPlacementId: ctx.selectedPlacementId,
       draggingPlacementId: ctx.draggingPlacementId,
-      onSelect: (id) => { ctx.selectedPlacementId = id; renderScene(ctx); playTap(); },
-      onMove: async (id, x, y) => {
-        ctx.draggingPlacementId = id;
-        renderScene(ctx);
-        await updatePlacement(id, { x, y });
-        ctx.draggingPlacementId = null;
-      },
+      bubbles: ctx.bubbles,
+      activeEventPlacementId: ctx.activeEvent ? ctx.activeEvent.placementId : null,
+      dropHint: ctx.dropHint || null,
+      onSelect: (id) => handleSelect(ctx, id),
+      onMove: (id, patch) => handleMove(ctx, id, patch),
+      onRotate: (id) => handleRotate(ctx, id),
+      onDelete: (id) => handleDeleteOne(ctx, id),
+      onDragHint: (hint) => handleDragHint(ctx, hint),
+      onEventTap: (id) => handleEventTap(ctx, id),
     })
   );
   if (ctx.activeTask) {
@@ -159,7 +226,6 @@ function renderScene(ctx) {
 }
 
 function renderTaskBar(ctx) {
-  /* 任務按鈕顯示已完成 / 總數的小提示 */
   const btn = ctx.layers.toolbar.querySelector('[data-act="pick"]');
   if (btn) {
     const done = ctx.completedTemplateIds.size;
@@ -182,12 +248,200 @@ function renderPhotoPanel(ctx) {
   );
 }
 
+/* ============ 格線操作 ============ */
+
+async function handleSelect(ctx, id) {
+  unlockAudio();
+  ctx.selectedPlacementId = id;
+  ctx.lastIdleAt = Date.now();
+  if (id == null) {
+    renderScene(ctx);
+    return;
+  }
+  playTap();
+
+  // 點擊隨機互動：泡泡 3 秒
+  const p = ctx.placements.find((x) => x.id === id);
+  const f = p ? ctx.furnitureMap[p.furnitureId] : null;
+  if (f) {
+    const result = rollClickInteraction(f);
+    if (result.text) {
+      ctx.bubbles[id] = { icon: '💬', text: result.text };
+      renderScene(ctx);
+      logInteraction({ placementId: id, furnitureId: f.id, kind: result.kind, text: result.text }).catch(() => {});
+      setTimeout(() => {
+        if (ctx.bubbles[id] && ctx.bubbles[id].text === result.text) {
+          delete ctx.bubbles[id];
+          renderScene(ctx);
+        }
+      }, 3200);
+      buzz([20]);
+      return;
+    }
+  }
+  renderScene(ctx);
+}
+
+async function handleMove(ctx, id, patch) {
+  const p = ctx.placements.find((x) => x.id === id);
+  const f = p ? ctx.furnitureMap[p.furnitureId] : null;
+  if (!p || !f) return;
+  const size = rotatedGridSize(f, p.rotation || 0);
+  // 以角落座標重算中心，避免舊像素殘留
+  const center = cornerCellToXY(f.placement, patch.gx, patch.gy, size.w, size.h);
+  if (!isAreaFree(ctx.placements, ctx.furnitureMap, id, f.placement, center.gx, center.gy, size.w, size.h)) {
+    flashHint('這格被佔走了，換個位置試試');
+    ctx.dropHint = null;
+    renderScene(ctx);
+    return;
+  }
+  ctx.draggingPlacementId = id;
+  await updatePlacement(id, { gx: center.gx, gy: center.gy, x: center.x, y: center.y });
+  ctx.placements = await getAllPlacements();
+  ctx.draggingPlacementId = null;
+  ctx.dropHint = null;
+  ctx.selectedPlacementId = id;
+  ctx.lastIdleAt = Date.now();
+  playTap();
+  renderScene(ctx);
+}
+
+/** 拖移中即時高亮（不整棵重渲染，避免中斷拖曳） */
+function handleDragHint(ctx, hint) {
+  if (!hint) {
+    ctx.dropHint = null;
+    const g = ctx.layers.sceneHost && ctx.layers.sceneHost.querySelector('.corner-drop');
+    if (g) g.innerHTML = '';
+    clearCellHot();
+    return;
+  }
+  const dragging = ctx.placements.find((p) => p.id === ctx.selectedPlacementId)
+    || ctx.placements.find((p) => ctx.furnitureMap[p.furnitureId]?.placement === hint.placement);
+  // 用被拖家具的實際佔位檢查（優先用選取中的那件）
+  let ok = true;
+  const sel = ctx.placements.find((p) => p.id === ctx.selectedPlacementId);
+  if (sel) {
+    const f = ctx.furnitureMap[sel.furnitureId];
+    const size = rotatedGridSize(f, sel.rotation || 0);
+    ok = isAreaFree(ctx.placements, ctx.furnitureMap, sel.id, hint.placement, hint.gx, hint.gy, size.w, size.h);
+    ctx.dropHint = { ...hint, gw: size.w, gh: size.h, ok };
+  } else {
+    ctx.dropHint = { ...hint, ok: true };
+  }
+  paintDropHint(ctx);
+}
+
+function clearCellHot() {
+  document.querySelectorAll('.cell.is-hot-ok,.cell.is-hot-bad').forEach((c) => {
+    c.classList.remove('is-hot-ok', 'is-hot-bad');
+  });
+}
+
+function paintDropHint(ctx) {
+  const h = ctx.dropHint;
+  const svgG = ctx.layers.sceneHost && ctx.layers.sceneHost.querySelector('.corner-drop');
+  if (!svgG) return;
+  if (!h) {
+    svgG.innerHTML = '';
+    return;
+  }
+  const pts = [];
+  for (let dx = 0; dx < (h.gw || 1); dx++) {
+    for (let dy = 0; dy < (h.gh || 1); dy++) {
+      pts.push(cornerCellToXY(h.placement, h.gx + dx, h.gy + dy, 1, 1));
+    }
+  }
+  const cx = Math.round(pts.reduce((s, p) => s + p.x, 0) / pts.length);
+  const cy = Math.round(pts.reduce((s, p) => s + p.y, 0) / pts.length);
+  svgG.innerHTML = `<g class="${h.ok ? 'drop-ok' : 'drop-bad'}"><ellipse cx="${cx}" cy="${cy}" rx="52" ry="22"/><text x="${cx}" y="${cy + 5}">${h.ok ? '放這裡' : '被佔走了'}</text></g>`;
+  // 對應格框高亮
+  clearCellHot();
+  for (let dx = 0; dx < (h.gw || 1); dx++) {
+    for (let dy = 0; dy < (h.gh || 1); dy++) {
+      const cell = ctx.layers.sceneHost.querySelector(`[data-cell="${h.placement}:${h.gx + dx},${h.gy + dy}"]`);
+      if (cell) cell.classList.add(h.ok ? 'is-hot-ok' : 'is-hot-bad');
+    }
+  }
+}
+
+async function handleDeleteOne(ctx, id) {
+  await stashPlacement(ctx, id);
+}
+
+async function handleRotate(ctx, id) {
+  const p = ctx.placements.find((x) => x.id === id);
+  const f = p ? ctx.furnitureMap[p.furnitureId] : null;
+  if (!p || !f) return;
+  const nextRot = ((p.rotation || 0) + 90) % 360;
+  const size = rotatedGridSize(f, nextRot);
+  const gx = p.gx ?? 0;
+  const gy = p.gy ?? 0;
+  if (!isAreaFree(ctx.placements, ctx.furnitureMap, id, f.placement, gx, gy, size.w, size.h)) {
+    flashHint('轉不過去，旁邊太擠了');
+    return;
+  }
+  const pt = cornerCellToXY(f.placement, gx, gy, size.w, size.h);
+  await updatePlacement(id, { rotation: nextRot, x: pt.x, y: pt.y });
+  ctx.placements = await getAllPlacements();
+  ctx.lastIdleAt = Date.now();
+  playTap();
+  buzz([20]);
+  renderScene(ctx);
+}
+
+/* ============ 隨機事件 ============ */
+
+function startIdleEvents(ctx) {
+  // 每 20 秒檢查一次，閒置 60 秒以上才跳事件，全域冷卻 90 秒
+  setInterval(() => {
+    if (document.hidden) return;
+    if (ctx.activeEvent) return;
+    if (ctx.layers.modalHost && ctx.layers.modalHost.innerHTML) return;
+    if (Date.now() - ctx.lastIdleAt < 60 * 1000) return;
+    if (isCoolingDown(ctx.lastEventAt, 90 * 1000)) return;
+    if (!ctx.placements.length) return;
+    const evt = rollIdleEvent(ctx.placements, ctx.furnitureMap);
+    if (!evt) return;
+    ctx.activeEvent = evt;
+    ctx.lastEventAt = Date.now();
+    ctx.bubbles[evt.placementId] = { icon: evt.icon, text: evt.text };
+    renderScene(ctx);
+    buzz([60, 60, 60]);
+  }, 20 * 1000);
+}
+
+async function handleEventTap(ctx, placementId) {
+  const evt = ctx.activeEvent;
+  unlockAudio();
+  if (evt && evt.placementId === placementId) {
+    const p = ctx.placements.find((x) => x.id === placementId);
+    if (p) {
+      await updatePlacement(p.id, { water: (p.water || 0) + (evt.water || 1) });
+      ctx.placements = await getAllPlacements();
+    }
+    await logInteraction({
+      placementId, furnitureId: evt.furnitureId, kind: 'event',
+      text: `${evt.icon} ${evt.text}`,
+    }).catch(() => {});
+    ctx.activeEvent = null;
+    delete ctx.bubbles[placementId];
+    ctx.lastIdleAt = Date.now();
+    celebrate();
+    renderScene(ctx);
+    flashSuccess({ title: evt.text });
+    return;
+  }
+  // 非事件泡泡：當一般選取
+  handleSelect(ctx, placementId);
+}
+
 /* ============ Task Picker ============ */
 
 function openTaskPicker(ctx) {
   unlockAudio();
   playTap();
   buzz([20]);
+  ctx.lastIdleAt = Date.now();
 
   const panel = TaskPicker({
     tasks: ctx.todayTasks,
@@ -221,7 +475,7 @@ function startTask(ctx, task) {
   ctx.layers.modalHost.appendChild(modal);
 }
 
-async function finishTask(ctx) {
+async function finishTask(ctx, moodFromModal) {
   const task = ctx.activeTask;
   if (!task) return;
 
@@ -229,6 +483,28 @@ async function finishTask(ctx) {
     alert('請先拍一張照片再完成任務');
     return;
   }
+
+  // 先選心情（只問一次）
+  if (!moodFromModal && !ctx.pendingMoodTask) {
+    ctx.pendingMoodTask = task;
+    ctx.layers.modalHost.innerHTML = '';
+    ctx.layers.modalHost.appendChild(
+      MoodModal({
+        onPick: (mood) => {
+          ctx.layers.modalHost.innerHTML = '';
+          ctx.pendingMoodTask = null;
+          finishTask(ctx, mood);
+        },
+        onSkip: () => {
+          ctx.layers.modalHost.innerHTML = '';
+          ctx.pendingMoodTask = null;
+          finishTask(ctx, null);
+        },
+      })
+    );
+    return;
+  }
+  const mood = moodFromModal || null;
 
   let photoId = null;
   if (task.needsPhoto && ctx.photoBlob) {
@@ -257,8 +533,13 @@ async function finishTask(ctx) {
     completed: true,
     withPhoto: !!task.needsPhoto,
     photoId,
+    mood: mood || undefined,
     completedAt: Date.now(),
   });
+
+  if (mood) {
+    await saveMood({ date: todayKey(), mood, taskId: task.id, note: task.title }).catch(() => {});
+  }
 
   const placement = ctx.placements.find((p) => p.id === task.placementId);
   if (placement) {
@@ -273,6 +554,7 @@ async function finishTask(ctx) {
   ctx.photoUrl = null;
   ctx.layers.modalHost.innerHTML = '';
   ctx.layers.photoHost.innerHTML = '';
+  ctx.lastIdleAt = Date.now();
 
   await reloadAll(ctx);
   renderScene(ctx);
@@ -296,18 +578,34 @@ function openCatalog(ctx) {
   unlockAudio();
   playTap();
   buzz([20]);
+  ctx.lastIdleAt = Date.now();
 
   ctx.layers.modalHost.innerHTML = '';
   ctx.layers.modalHost.appendChild(
     FurnitureCatalog({
       furnitureCatalog: ctx.furnitureCatalog,
+      furnitureMap: ctx.furnitureMap,
+      warehouse: ctx.warehouse || [],
       onPick: async (furnitureId) => {
         const f = ctx.furnitureMap[furnitureId];
-        const pos = randomPosition(f.placement);
+        if (!f) return;
+        const size = rotatedGridSize(f, 0);
+        // 檢查還有沒有空格
+        const spot = randomGridPosition(ctx.placements, ctx.furnitureMap, f);
+        const free = isAreaFree(ctx.placements, ctx.furnitureMap, null, f.placement, spot.gx, spot.gy, size.w, size.h);
+        if (!free) {
+          // 房間滿了（randomGridPosition 回傳重疊位）
+          if (!findFreeCell(ctx.placements, ctx.furnitureMap, f)) {
+            flashHint(f.placement === 'wall' ? '牆面滿了，先收回一件到倉庫吧' : '地板滿了，先收回一件到倉庫吧');
+            return;
+          }
+        }
         await addPlacement({
           furnitureId,
-          x: pos.x,
-          y: pos.y,
+          gx: spot.gx,
+          gy: spot.gy,
+          x: spot.x,
+          y: spot.y,
           rotation: 0,
           water: 0,
           createdAt: Date.now(),
@@ -318,12 +616,55 @@ function openCatalog(ctx) {
         renderTaskBar(ctx);
         celebrate();
       },
+      onTakeOut: (wid) => placeFromWarehouse(ctx, wid),
       onClose: () => { ctx.layers.modalHost.innerHTML = ''; },
     })
   );
 }
 
-/* ============ Memory Wall ============ */
+/** 倉庫取出 → 放回房間空格（保留原本的 water/rotation） */
+async function placeFromWarehouse(ctx, warehouseId) {
+  const rec = await takeFromWarehouse(warehouseId);
+  if (!rec) {
+    flashHint('這件已經取出過了');
+    await reloadAll(ctx);
+    return;
+  }
+  const f = ctx.furnitureMap[rec.furnitureId];
+  if (!f) {
+    flashHint('型錄找不到這件家具');
+    await reloadAll(ctx);
+    return;
+  }
+  const size = rotatedGridSize(f, rec.rotation || 0);
+  const spot = randomGridPosition(ctx.placements, ctx.furnitureMap, { ...f, gridSize: size });
+  if (!isAreaFree(ctx.placements, ctx.furnitureMap, null, f.placement, spot.gx, spot.gy, size.w, size.h)
+    && !findFreeCell(ctx.placements, ctx.furnitureMap, f)) {
+    // 放不回去：退回倉庫
+    await stashToWarehouse({ furnitureId: rec.furnitureId, rotation: rec.rotation, water: rec.water });
+    flashHint(f.placement === 'wall' ? '牆面滿了，先收回一件吧' : '地板滿了，先收回一件吧');
+    await reloadAll(ctx);
+    return;
+  }
+  await addPlacement({
+    furnitureId: rec.furnitureId,
+    gx: spot.gx,
+    gy: spot.gy,
+    x: spot.x,
+    y: spot.y,
+    rotation: rec.rotation || 0,
+    water: rec.water || 0,
+    createdAt: Date.now(),
+  });
+  await reloadAll(ctx);
+  ctx.layers.modalHost.innerHTML = '';
+  renderScene(ctx);
+  renderTaskBar(ctx);
+  celebrate();
+  flashHint(`已取出「${f.label}」`);
+}
+
+/* ============ Memory Wall（舊） ============ */
 
 async function openMemoryWall(ctx) {
   unlockAudio();
@@ -346,18 +687,108 @@ async function openMemoryWall(ctx) {
   ctx.layers.modalHost.appendChild(wall);
 }
 
-/* ============ Delete Selected ============ */
+/* ============ Diary（IG 式日記） ============ */
+
+async function openDiary(ctx) {
+  unlockAudio();
+  playTap();
+  ctx.lastIdleAt = Date.now();
+
+  const polaroids = await getAllPolaroids();
+  const polaroidsWithUrls = polaroids.map((p) => ({
+    ...p,
+    photoUrl: p.photoBlob ? URL.createObjectURL(p.photoBlob) : '',
+  }));
+  const tasks = await getRecentTasks(30);
+  const moods = await getAllMoods(50);
+  const interactions = await getRecentInteractions(50);
+  const stats = computeStats(ctx, tasks);
+
+  ctx.layers.modalHost.innerHTML = '';
+  const wall = DiaryWall({
+    polaroids: polaroidsWithUrls,
+    tasks,
+    moods,
+    interactions,
+    stats,
+    onClose: () => {
+      polaroidsWithUrls.forEach((p) => { try { URL.revokeObjectURL(p.photoUrl); } catch (_) {} });
+      ctx.layers.modalHost.innerHTML = '';
+    },
+    onShareText: () => shareSummary(ctx, stats, tasks),
+  });
+  ctx.layers.modalHost.appendChild(wall);
+}
+
+function computeStats(ctx, tasks) {
+  const totalTasks = tasks.length;
+  const furnitureCount = ctx.placements.length;
+  const interactionCount = 0; // 日記開啟時才查，這裡先顯示任務數為主
+  // 連續天數：用任務日期倒推
+  const dates = [...new Set(tasks.map((t) => {
+    const d = new Date(t.completedAt || Date.now());
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }))].sort().reverse();
+  let streakDays = 0;
+  if (dates.length) {
+    const today = todayKey();
+    let cursor = new Date();
+    // 若今天還沒任務，從昨天開始算也算連續
+    if (dates[0] !== today) cursor.setDate(cursor.getDate() - 1);
+    for (const dk of dates) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+      if (dk === key) {
+        streakDays++;
+        cursor.setDate(cursor.getDate() - 1);
+      } else break;
+    }
+    if (!streakDays && dates.length) streakDays = 1;
+  }
+  return { totalTasks, furnitureCount, interactionCount, streakDays };
+}
+
+async function shareSummary(ctx, stats, tasks) {
+  const recent = tasks.slice(0, 3).map((t) => `・${t.templateId || '完成一個任務'}`).join('\n');
+  const text = `📖 我的暖窩日記\n連續 ${stats.streakDays} 天 · 共 ${stats.totalTasks} 個任務 · ${ctx.placements.length} 件家具\n最近：\n${recent || '・今天也要加油！'}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: '我的暖窩日記', text });
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+    flashHint('已複製分享文字，可貼給家人看');
+  } catch (_) {
+    alert(text);
+  }
+}
+
+/* ============ Delete → 收進倉庫（不斷捨） ============ */
+
+async function stashPlacement(ctx, id) {
+  const p = ctx.placements.find((x) => x.id === id);
+  if (!p) return;
+  await stashToWarehouse({
+    furnitureId: p.furnitureId,
+    rotation: p.rotation || 0,
+    water: p.water || 0,
+  });
+  await deletePlacement(id);
+  if (ctx.selectedPlacementId === id) ctx.selectedPlacementId = null;
+  delete ctx.bubbles[id];
+  if (ctx.activeEvent && ctx.activeEvent.placementId === id) ctx.activeEvent = null;
+  await reloadAll(ctx);
+  renderScene(ctx);
+  renderTaskBar(ctx);
+  const f = ctx.furnitureMap[p.furnitureId];
+  flashHint(`「${f ? f.label : '家具'}」已收進倉庫，可從＋加家具取出`);
+}
 
 async function deleteSelected(ctx) {
   if (!ctx.selectedPlacementId) {
     flashHint('先點一件家具，再按 🗑️');
     return;
   }
-  await deletePlacement(ctx.selectedPlacementId);
-  ctx.selectedPlacementId = null;
-  await reloadAll(ctx);
-  renderScene(ctx);
-  renderTaskBar(ctx);
+  await stashPlacement(ctx, ctx.selectedPlacementId);
 }
 
 function flashHint(text) {
@@ -415,6 +846,6 @@ async function ensureInstallDate() {
   const exists = await getMeta('installDate');
   if (!exists) {
     await setMeta('installDate', new Date().toISOString());
-    await setMeta('phase', '0.1.0');
+    await setMeta('phase', '0.4.0');
   }
 }

@@ -1,61 +1,185 @@
-import { SCENE } from '../modules/scene.js';
+import {
+  SCENE, GRID, CORNER, rotatedGridSize, cornerCellToXY,
+  cornerDepth, cornerPolygons,
+} from '../modules/scene.js';
 import { FurnitureItem } from './FurnitureItem.js';
 
 /**
- * 3/4 透視房間場景 — Warm Home
- * ──────────────────────────
- * 固定視角，無 camera 控制。
- *   - 牆面：固定直立，佔上方 30%
- *   - 地板：CSS perspective 傾斜向前
- *   - 家具：依 placement 決定在牆或地板，3D 旋轉對齊透視
- *
- * props:
- *   - furnitureCatalog
- *   - placements: 已擺放的家具實例
- *   - selectedPlacementId
- *   - onSelect(placementId)
- *   - onMove(placementId, x, y)
- *   - draggingPlacementId (回饋用)
+ * 角落式 2.5D 房間 — Warm Home v0.3（try.html 視角）
+ * ─────────────────────────────────────────────
+ * 左牆 + 右牆 + 菱形地板，視角固定不旋轉。
+ * 地板 8×4 格、牆面 8×2 格（0-3 左牆、4-7 右牆），一格一格框住、可拖移吸附。
  */
 
 export function RoomScene({
   furnitureCatalog,
+  furnitureMap,
   placements,
   selectedPlacementId,
   onSelect,
   onMove,
+  onRotate,
+  onEventTap,
+  onDelete,
+  onDragHint,
   draggingPlacementId,
+  dropHint = null,
+  bubbles = {},
+  activeEventPlacementId = null,
 }) {
   const root = document.createElement('div');
-  root.className = 'room-scene';
+  root.className = 'room-scene room-scene--corner';
 
   root.innerHTML = `
     <div class="room-scene__viewport">
-      <div class="room__sky" aria-hidden="true"></div>
-      <div class="room__wall-back" aria-hidden="true">
-        <div class="room__window" aria-hidden="true"></div>
-      </div>
-      <div class="room__floor" aria-hidden="true">
-        <div class="room__rug" aria-hidden="true"></div>
-      </div>
+      <svg class="corner-svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <defs>
+          <linearGradient id="cw-lw" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#FAF4EB"/><stop offset="100%" stop-color="#E1D3C1"/>
+          </linearGradient>
+          <linearGradient id="cw-rw" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#FCF9F3"/><stop offset="100%" stop-color="#E9DCCC"/>
+          </linearGradient>
+          <linearGradient id="cw-fl" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#E0CDBC"/><stop offset="100%" stop-color="#CBB29C"/>
+          </linearGradient>
+          <linearGradient id="cw-corner" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="rgba(62,39,35,0.2)"/><stop offset="100%" stop-color="rgba(62,39,35,0)"/>
+          </linearGradient>
+        </defs>
+        <!-- 3D 模型地基底座 -->
+        <polygon points="${cornerPolygons().baseLeft}" fill="#8D6E63" stroke="#5D4037" stroke-width="1"/>
+        <polygon points="${cornerPolygons().baseRight}" fill="#6D4C41" stroke="#3E2723" stroke-width="1"/>
+        <polygon points="${cornerPolygons().baseFront}" fill="#5D4037"/>
+        <!-- 牆 + 地板本體 -->
+        <polygon points="${cornerPolygons().leftWall}" fill="url(#cw-lw)" stroke="#D4C4B2" stroke-width="1.5"/>
+        <polygon points="${cornerPolygons().rightWall}" fill="url(#cw-rw)" stroke="#D4C4B2" stroke-width="1.5"/>
+        <polygon points="${cornerPolygons().floor}" fill="url(#cw-fl)" stroke="#BFA894" stroke-width="1.5"/>
+        <!-- 踢腳板 + 頂角線 -->
+        <polygon points="${cornerPolygons().skirtLeft}" fill="#8D6E63" opacity="0.85"/>
+        <polygon points="${cornerPolygons().skirtRight}" fill="#795548" opacity="0.85"/>
+        <polygon points="400,100 256,172 256,177 400,105" fill="#A1887F"/>
+        <polygon points="400,100 688,244 688,249 400,105" fill="#8D6E63"/>
+        <!-- 角落陰影 -->
+        <polygon points="400,100 420,110 420,230 400,220" fill="url(#cw-corner)"/>
+        <line x1="400" y1="100" x2="400" y2="220" stroke="#4E342E" stroke-width="2" opacity="0.5"/>
+        <g class="corner-cells">${cellsSVG()}</g>
+        <g class="corner-drop">${dropSVG(dropHint)}</g>
+      </svg>
       <div class="room__furniture-layer"></div>
+      <div class="room__hint" aria-hidden="true">拖家具到發光的格子 · 點家具會說話 · 選取後 ↻ 旋轉</div>
     </div>
   `;
 
+  const map = furnitureMap || Object.fromEntries(furnitureCatalog.map((f) => [f.id, f]));
   const layer = root.querySelector('.room__furniture-layer');
-  for (const p of placements) {
-    const furniture = furnitureCatalog.find((f) => f.id === p.furnitureId);
-    if (!furniture) continue;
+
+  const sorted = [...placements].sort((a, b) => {
+    const fa = map[a.furnitureId];
+    const fb = map[b.furnitureId];
+    const pa = fa ? fa.placement : 'floor';
+    const pb = fb ? fb.placement : 'floor';
+    if (pa !== pb) return pa === 'wall' ? -1 : 1;
+    const sa = fa ? rotatedGridSize(fa, a.rotation || 0) : { w: 1, h: 1 };
+    const sb = fb ? rotatedGridSize(fb, b.rotation || 0) : { w: 1, h: 1 };
+    return cornerDepth(pa, a.gx ?? 0, a.gy ?? 0, sa.w, sa.h)
+         - cornerDepth(pb, b.gx ?? 0, b.gy ?? 0, sb.w, sb.h);
+  });
+
+  sorted.forEach((p) => {
+    const furniture = map[p.furnitureId];
+    if (!furniture) return;
+    const size = rotatedGridSize(furniture, p.rotation || 0);
+    const depth = furniture.placement === 'wall'
+      ? 5
+      : 20 + Math.round(cornerDepth('floor', p.gx ?? 0, p.gy ?? 0, size.w, size.h) * 10);
     const el = FurnitureItem({
       placement: p,
       furniture,
       selected: selectedPlacementId === p.id,
       dragging: draggingPlacementId === p.id,
+      depth,
+      bubble: bubbles[p.id] || null,
+      hasEvent: activeEventPlacementId === p.id,
       onSelect: () => onSelect(p.id),
-      onMove: (x, y) => onMove(p.id, x, y),
+      onMove: (id, patch) => onMove(id, patch),
+      onRotate: (id) => onRotate && onRotate(id),
+      onDelete: (id) => onDelete && onDelete(id),
+      onEventTap: (id) => onEventTap && onEventTap(id),
+      onDragHint: (hint) => onDragHint && onDragHint(hint),
     });
     layer.appendChild(el);
-  }
+  });
+
+  // 點空地取消選取
+  root.querySelector('.room-scene__viewport').addEventListener('click', (e) => {
+    if (e.target.closest('.furniture')) return;
+    onSelect(null);
+  });
 
   return root;
 }
+
+/** 一格一格的框：地板 32 格 + 牆面 16 格 */
+function cellsSVG() {
+  const { O, R, L, TOP, V } = CORNER;
+  const P = (x, y) => `${Math.round(x)},${Math.round(y)}`;
+  let s = '';
+  // 地板格
+  for (let gy = 0; gy < GRID.floor.rows; gy++) {
+    for (let gx = 0; gx < GRID.floor.cols; gx++) {
+      const ax = O.x + (gx / 8) * R.x + (gy / 4) * L.x;
+      const ay = O.y + (gx / 8) * R.y + (gy / 4) * L.y;
+      const bx = O.x + ((gx + 1) / 8) * R.x + (gy / 4) * L.x;
+      const by = O.y + ((gx + 1) / 8) * R.y + (gy / 4) * L.y;
+      const cx = O.x + ((gx + 1) / 8) * R.x + ((gy + 1) / 4) * L.x;
+      const cy = O.y + ((gx + 1) / 8) * R.y + ((gy + 1) / 4) * L.y;
+      const dx = O.x + (gx / 8) * R.x + ((gy + 1) / 4) * L.x;
+      const dy = O.y + (gx / 8) * R.y + ((gy + 1) / 4) * L.y;
+      s += `<polygon points="${P(ax, ay)} ${P(bx, by)} ${P(cx, cy)} ${P(dx, dy)}" class="cell cell--floor" data-cell="floor:${gx},${gy}"/>`;
+    }
+  }
+  // 牆格（左 4×2 + 右 4×2）
+  for (let gy = 0; gy < GRID.wall.rows; gy++) {
+    for (let gx = 0; gx < GRID.wall.cols; gx++) {
+      const quad = wallQuad(gx, gy, TOP, R, L, V);
+      s += `<polygon points="${quad}" class="cell ${gx < 4 ? 'cell--left' : 'cell--right'}" data-cell="wall:${gx},${gy}"/>`;
+    }
+  }
+  return s;
+}
+
+function wallQuad(gx, gy, TOP, R, L, V) {
+  const E = gx < 4 ? L : R;
+  const col = gx < 4 ? gx : gx - 4;
+  const P = (x, y) => `${Math.round(x)},${Math.round(y)}`;
+  const ax = TOP.x + (col / 4) * E.x + (gy / 2) * V.x;
+  const ay = TOP.y + (col / 4) * E.y + (gy / 2) * V.y;
+  const bx = TOP.x + ((col + 1) / 4) * E.x + (gy / 2) * V.x;
+  const by = TOP.y + ((col + 1) / 4) * E.y + (gy / 2) * V.y;
+  const cx = TOP.x + ((col + 1) / 4) * E.x + ((gy + 1) / 2) * V.x;
+  const cy = TOP.y + ((col + 1) / 4) * E.y + ((gy + 1) / 2) * V.y;
+  const dx = TOP.x + (col / 4) * E.x + ((gy + 1) / 2) * V.x;
+  const dy = TOP.y + (col / 4) * E.y + ((gy + 1) / 2) * V.y;
+  return `${P(ax, ay)} ${P(bx, by)} ${P(cx, cy)} ${P(dx, dy)}`;
+}
+
+/** 拖移中的目標格高亮（綠=可放、紅=被佔） */
+function dropSVG(dropHint) {
+  if (!dropHint) return '';
+  const { placement, gx, gy, gw = 1, gh = 1, ok } = dropHint;
+  const pts = [];
+  for (let dx = 0; dx < gw; dx++) {
+    for (let dy = 0; dy < gh; dy++) {
+      const pt = cornerCellToXY(placement, gx + dx, gy + dy, 1, 1);
+      pts.push(pt);
+    }
+  }
+  if (!pts.length) return '';
+  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+  const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+  const cls = ok ? 'drop-ok' : 'drop-bad';
+  return `<g class="${cls}"><ellipse cx="${Math.round(cx)}" cy="${Math.round(cy)}" rx="52" ry="22"/><text x="${Math.round(cx)}" y="${Math.round(cy + 5)}">${ok ? '放這裡' : '被佔走了'}</text></g>`;
+}
+
+export { SCENE };
