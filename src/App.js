@@ -28,6 +28,7 @@ import { playTap, celebrate, unlockAudio, buzz } from './modules/feedback.js';
  */
 export async function mountApp(container) {
   const ctx = {
+    container,
     task: null,
     completedSlotId: null,
     placements: {},
@@ -199,15 +200,15 @@ async function finishTask(ctx, withPhoto) {
   ctx.layerEls.modal.innerHTML = '';
   ctx.layerEls.photo.innerHTML = '';
   renderScene(ctx);
-  flashSuccessBanner(task);
+  flashSuccessBanner(ctx, task);
 }
 
-function flashSuccessBanner(task) {
-  let host = container.querySelector('.banner-host');
+function flashSuccessBanner(ctx, task) {
+  let host = ctx.container.querySelector('.banner-host');
   if (!host) {
     host = document.createElement('div');
     host.className = 'banner-host';
-    container.appendChild(host);
+    ctx.container.appendChild(host);
   }
   const banner = document.createElement('div');
   banner.className = 'banner banner--success';
@@ -264,7 +265,7 @@ function onSlotTap(ctx, slotId) {
     },
   });
   wrapper.appendChild(drawer);
-  container.appendChild(wrapper);
+  ctx.container.appendChild(wrapper);
 }
 
 /* ============ Secret Admin Trigger ============ */
@@ -307,7 +308,7 @@ async function openAdmin(ctx) {
     },
   });
   wrapper.appendChild(panel);
-  container.appendChild(wrapper);
+  ctx.container.appendChild(wrapper);
 }
 
 /* ============ First run ============ */
