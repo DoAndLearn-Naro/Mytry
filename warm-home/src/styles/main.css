@@ -605,7 +605,11 @@ button { font-family: inherit; }
 .room-scene--corner .room__furniture-layer { position: absolute; inset: 0; pointer-events: none; }
 .room-scene--corner .furniture { transform: translate(-50%, -72%); }
 .room-scene--corner .furniture.is-dragging { transform: translate(-50%, -72%) scale(1.08); opacity: 0.92; filter: drop-shadow(0 18px 25px rgba(0,0,0,0.35)); }
-.room-scene--corner .furniture.is-selected { outline: 3px dashed var(--color-accent); outline-offset: 4px; border-radius: 18px; }
+.room-scene--corner .furniture.is-selected { outline: none; }
+/* 選取光暈貼著本體（drop-shadow 跟著透明度走，不再是大虛線方框） */
+.room-scene--corner .furniture.is-selected .furniture__art {
+  filter: drop-shadow(0 0 5px #FFB300) drop-shadow(0 0 14px rgba(255, 179, 0, 0.85));
+}
 
 /* 地板：徑向地面陰影（貼地感） */
 .room-scene--corner .floor-shadow {

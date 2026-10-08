@@ -114,11 +114,41 @@ export function RoomScene({
     layer.appendChild(el);
   });
 
-  // 點空地取消選取
-  root.querySelector('.room-scene__viewport').addEventListener('click', (e) => {
-    if (e.target.closest('.furniture')) return;
-    onSelect(null);
-  });
+  // 精準點選：在 viewport 捕獲點擊，選「框含點擊點且中心最近」的那件，
+  // 取代各家具各自搶點擊（盒子大＋重疊時容易選錯）。
+  const viewport = root.querySelector('.room-scene__viewport');
+  viewport.addEventListener('click', (e) => {
+    if (e.target.closest('.event-badge,.mini-toolbar,.tool-btn')) return; // 專屬按鈕自己處理
+    const moved = root.querySelector('.furniture[data-moved="1"]');
+    if (moved) { moved.dataset.moved = ''; return; } // 剛拖完吞掉這次點擊
+    e.stopPropagation();
+    const rect = viewport.getBoundingClientRect();
+    if (!e.clientX && e.clientX !== 0) { onSelect(null); return; }
+    const sx = ((e.clientX - rect.left) / rect.width) * SCENE.width;
+    const sy = ((e.clientY - rect.top) / rect.height) * SCENE.height;
+    const scale = rect.width / SCENE.width; // px per unit
+    let best = null;
+    let bestD = Infinity;
+    for (const p of placements) {
+      const f = map[p.furnitureId];
+      if (!f) continue;
+      const plane = resolvePlane(p, f);
+      const size = rotatedGridSize(f, p.rotation || 0);
+      const c = cornerCellToXY(plane, p.gx ?? 0, p.gy ?? 0, size.w, size.h);
+      const hw = (f.footprint.w / 2) / scale;
+      const hh = (f.footprint.h / 2) / scale;
+      const cy = c.y - hh * 0.44; // 對齊 translate(-50%,-72%) 的視覺中心
+      if (Math.abs(sx - c.x) > hw || Math.abs(sy - cy) > hh) continue;
+      const d = (sx - c.x) ** 2 + (sy - cy) ** 2;
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    if (!best) { onSelect(null); return; } // 點空地取消選取
+    if (activeEventPlacementId === best.id) {
+      if (onEventTap) onEventTap(best.id);
+      return;
+    }
+    onSelect(best.id);
+  }, true);
 
   return root;
 }
