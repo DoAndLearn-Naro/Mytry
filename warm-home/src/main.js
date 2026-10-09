@@ -16,6 +16,16 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     if (import.meta.env.PROD) {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
+      // 新版 SW 接管就自動重整一次：F5 跟強制刷新看到同一版，
+      // 長輩也不會卡在舊版。首次安裝不重整（避免迴圈）。
+      let firstInstall = !navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (firstInstall) {
+          firstInstall = false;
+          return;
+        }
+        window.location.reload();
+      });
     }
   });
 }
