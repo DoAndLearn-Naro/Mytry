@@ -23,7 +23,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '🛏️',
     category: 'bedroom',
     placement: 'floor',
-    footprint: { w: 238, h: 229 },
+    footprint: { w: 238, h: 217 },
     gridSize: { w: 4, h: 3 },
     tasks: [
       { id: 'bed-morning', icon: '🌅', title: '起床拍窗外', prompt: '起床後走到窗邊，拍一張窗外的照片。', needsPhoto: true, water: 1 },
@@ -37,7 +37,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '🛋️',
     category: 'living',
     placement: 'floor',
-    footprint: { w: 136, h: 146 },
+    footprint: { w: 136, h: 166 },
     gridSize: { w: 3, h: 1 },
     tasks: [
       { id: 'sofa-sit', icon: '🪟', title: '坐在沙發看窗外 5 分鐘', prompt: '坐到沙發上，慢慢看看窗外。', needsPhoto: false, water: 1 },
@@ -51,7 +51,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '🪑',
     category: 'work',
     placement: 'floor',
-    footprint: { w: 136, h: 143 },
+    footprint: { w: 136, h: 155 },
     gridSize: { w: 3, h: 1 },
     tasks: [
       { id: 'desk-tidy', icon: '🧹', title: '整理桌面拍一張', prompt: '把桌面整理好，拍一張整齊的照片。', needsPhoto: true, water: 2 },
@@ -65,7 +65,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '🪴',
     category: 'nature',
     placement: 'floor',
-    footprint: { w: 68, h: 78 },
+    footprint: { w: 68, h: 111 },
     gridSize: { w: 1, h: 1 },
     tasks: [
       { id: 'plant-water', icon: '💧', title: '幫植物澆水拍一張', prompt: '幫植物澆點水，拍一張它的照片。', needsPhoto: true, water: 2 },
@@ -79,7 +79,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '🪔',
     category: 'light',
     placement: 'floor',
-    footprint: { w: 68, h: 83 },
+    footprint: { w: 68, h: 123 },
     gridSize: { w: 1, h: 1 },
     tasks: [
       { id: 'lamp-turn-on', icon: '💡', title: '開燈看書 5 分鐘', prompt: '打開立燈，找本書翻 5 分鐘。', needsPhoto: false, water: 1 },
@@ -93,7 +93,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '🪑',
     category: 'living',
     placement: 'floor',
-    footprint: { w: 68, h: 81 },
+    footprint: { w: 68, h: 118 },
     gridSize: { w: 1, h: 1 },
     tasks: [
       { id: 'chair-twist', icon: '🔄', title: '坐著轉身活動 1 分鐘', prompt: '坐在椅子上，慢慢轉身往左右看。', needsPhoto: false, water: 1 },
@@ -106,7 +106,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '☕',
     category: 'kitchen',
     placement: 'floor',
-    footprint: { w: 68, h: 83 },
+    footprint: { w: 68, h: 132 },
     gridSize: { w: 1, h: 1 },
     tasks: [
       { id: 'cup-drink', icon: '🥤', title: '喝一杯溫水', prompt: '幫自己倒杯水，慢慢喝完。', needsPhoto: false, water: 1 },
@@ -121,7 +121,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '🪑',
     category: 'living',
     placement: 'floor',
-    footprint: { w: 68, h: 81 },
+    footprint: { w: 68, h: 124 },
     gridSize: { w: 1, h: 1 },
     unlockLevel: 2,
     tasks: [
@@ -136,7 +136,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '🍵',
     category: 'living',
     placement: 'floor',
-    footprint: { w: 136, h: 132 },
+    footprint: { w: 136, h: 125 },
     gridSize: { w: 3, h: 1 },
     unlockLevel: 2,
     tasks: [
@@ -153,7 +153,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '🖼️',
     category: 'wall',
     placement: 'wall',
-    footprint: { w: 102, h: 80 },
+    footprint: { w: 102, h: 78 },
     gridSize: { w: 2, h: 1 },
     tasks: [
       { id: 'frame-choose', icon: '🖼️', title: '挑今天拍的照片掛上去', prompt: '從今天拍的照片挑一張掛到畫框裡。', needsPhoto: true, water: 2 },
@@ -179,7 +179,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '🪟',
     category: 'wall',
     placement: 'wall',
-    footprint: { w: 102, h: 76 },
+    footprint: { w: 102, h: 74 },
     gridSize: { w: 2, h: 1 },
     tasks: [
       { id: 'window-sky', icon: '☁️', title: '拍一張窗外天空', prompt: '從窗戶拍一張天空的照片。', needsPhoto: true, water: 2 },
@@ -193,7 +193,7 @@ export const DEFAULT_FURNITURE = [
     emoji: '🧧',
     category: 'wall',
     placement: 'wall',
-    footprint: { w: 68, h: 82 },
+    footprint: { w: 68, h: 84 },
     gridSize: { w: 1, h: 1 },
     tasks: [
       { id: 'couplet-read', icon: '🧧', title: '念一次春聯', prompt: '大聲念一次春聯上的吉祥話。', needsPhoto: false, water: 1 },

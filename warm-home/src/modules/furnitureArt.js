@@ -80,7 +80,8 @@ function createPainter() {
       api.poly([iso(x + w, y, z), iso(x + w, y + d, z), iso(x + w, y + d, z + h), iso(x + w, y, z + h)], c.right, e, 1.2);
     },
     svg() {
-      const pad = 6;
+      // 留白只給描邊一點呼吸空間（之前 pad=6 在等角單位下等於半個框，腳全飄起來）
+      const pad = 0.4;
       const vx = bb.x0 - pad, vy = bb.y0 - pad;
       const vw = bb.x1 - bb.x0 + pad * 2, vh = bb.y1 - bb.y0 + pad * 2;
       return `<svg viewBox="${F(vx)} ${F(vy)} ${F(vw)} ${F(vh)}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${defs.length ? `<defs>${defs.join('')}</defs>` : ''}${parts.join('')}</svg>`;
