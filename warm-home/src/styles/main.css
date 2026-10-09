@@ -592,7 +592,7 @@ button { font-family: inherit; }
 /* ============================================================
  * v0.3 角落房（try.html 視角）
  * ============================================================ */
-.room-scene--corner { aspect-ratio: 4 / 3; background: #FAF6F0; }
+.room-scene--corner { aspect-ratio: 10 / 15; background: #FAF6F0; }
 .room-scene--corner .room-scene__viewport { position: relative; width: 100%; height: 100%; }
 .corner-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .corner-svg .cell { fill: rgba(255,255,255,0.08); stroke: rgba(141,110,99,0.35); stroke-width: 1.5; stroke-dasharray: 5 4; }
